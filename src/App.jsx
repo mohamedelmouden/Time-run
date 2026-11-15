@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Activity, AlarmClock, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Award, BarChart3, CalendarDays,
@@ -87,14 +87,41 @@ function EmptyState({ icon: Icon = Sparkles, text }) { return <div className="em
 
 function Countdown({ event, large = false }) {
   const [now, setNow] = useState(Date.now());
+  const { t, lang } = useFlame();
+  const gradientId = `countdown-${useId().replace(/:/g, '')}`;
   useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(id); }, []);
-  const remaining = Math.max(0, eventDeadline(event).getTime() - now);
+  const end = eventDeadline(event).getTime();
+  const remaining = Math.max(0, end - now);
   const days = Math.floor(remaining / 86400000);
-  const clock = remaining < 86400000 ? `${pad(Math.floor(remaining / 3600000))}:${pad(Math.floor((remaining % 3600000) / 60000))}:${pad(Math.floor((remaining % 60000) / 1000))}` : `${days} يوم`;
-  const percentage = event.status === 'completed' ? 1 : Math.min(1, Math.max(0, (now - new Date(event.createdAt).getTime()) / Math.max(1, eventDeadline(event).getTime() - new Date(event.createdAt).getTime())));
-  return <div className={`countdown ${large ? 'countdown-large' : ''} ${remaining < 3600000 ? 'countdown-critical' : ''}`}>
-    <svg viewBox="0 0 120 120" aria-hidden="true"><circle className="countdown-track" cx="60" cy="60" r="52"/><circle className="countdown-progress" cx="60" cy="60" r="52" style={{ strokeDashoffset: `${327 * (1 - percentage)}` }}/></svg>
-    <div className="countdown-center"><strong>{event.status === 'completed' ? '✓' : clock}</strong><span>{event.status === 'completed' ? 'اكتمل' : remaining < 86400000 ? 'متبقية' : 'متبقٍ'}</span></div>
+  const clock = days > 0
+    ? `${new Intl.NumberFormat(localeTag(lang)).format(days)} ${t(days === 1 ? 'يوم' : 'أيام')}`
+    : `${pad(Math.floor(remaining / 3600000))}:${pad(Math.floor((remaining % 3600000) / 60000))}:${pad(Math.floor((remaining % 60000) / 1000))}`;
+  const created = new Date(event.createdAt).getTime();
+  const span = end - created;
+  const percentage = event.status === 'completed' ? 1 : event.status === 'expired' ? 0 : span > 0 ? Math.min(1, Math.max(0, remaining / span)) : (remaining > 0 ? 1 : 0);
+  const circumference = 314.16;
+  const dashOffset = circumference * (1 - percentage);
+  const dotAngle = percentage * Math.PI * 2;
+  const dotX = 60 + 50 * Math.cos(dotAngle);
+  const dotY = 60 + 50 * Math.sin(dotAngle);
+  const urgent = remaining < 3600000 && event.status === 'upcoming';
+  const stateClass = event.status === 'completed' ? 'countdown-complete' : event.status === 'expired' ? 'countdown-expired' : '';
+  const label = event.status === 'completed' ? t('اكتمل') : event.status === 'expired' ? t('انتهى الموعد') : days > 0 ? t('متبقٍ') : t('متبقية');
+  return <div className={`countdown ${large ? 'countdown-large' : ''} ${urgent ? 'countdown-critical' : ''} ${stateClass}`}>
+    <span className="countdown-aura" aria-hidden="true"/>
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="1" x2="1" y2="0"><stop className="countdown-stop-start" offset="0"/><stop className="countdown-stop-end" offset="1"/></linearGradient>
+        <filter id={`${gradientId}-blur`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.7"/></filter>
+      </defs>
+      <circle className="countdown-rim" cx="60" cy="60" r="56"/>
+      <circle className="countdown-track" cx="60" cy="60" r="50"/>
+      <circle className="countdown-glow" cx="60" cy="60" r="50" stroke={`url(#${gradientId})`} filter={`url(#${gradientId}-blur)`} style={{ strokeDashoffset: dashOffset }}/>
+      <circle className="countdown-progress" cx="60" cy="60" r="50" stroke={`url(#${gradientId})`} style={{ strokeDashoffset: dashOffset }}/>
+      <circle className="countdown-dot-halo" cx={dotX} cy={dotY} r="5.5"/>
+      <circle className="countdown-dot" cx={dotX} cy={dotY} r="2.8"/>
+    </svg>
+    <div className="countdown-center"><strong>{event.status === 'completed' ? '✓' : clock}</strong><span>{label}</span></div>
   </div>;
 }
 
