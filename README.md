@@ -1,4 +1,4 @@
-# FLAME — independent rebuild
+# FLAME
 
 This is a separate, complete rebuild of the FLAME personal discipline and expense tracker. It keeps the Arabic-first dark/fire visual design and the existing feature set, including installability, while avoiding the old cache failure that could return HTML in place of a missing JavaScript or CSS file.
 
