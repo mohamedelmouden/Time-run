@@ -1,5 +1,7 @@
 export const STORAGE_KEY = 'flame:data';
 export const DATE_FORMAT = /^\d{4}-\d{2}-\d{2}$/;
+export const PURCHASE_PERIODS = ['morning', 'noon', 'afternoon', 'night'];
+export const purchasePeriodLabels = { morning: 'صباحاً', noon: 'زوالاً', afternoon: 'بعد الزوال', night: 'ليلاً', unspecified: 'غير محدد' };
 export const accents = [
   { id: 'orange', label: 'برتقالي', primary: '#ff8a32', glow: '#ffc15a' },
   { id: 'yellow', label: 'أصفر', primary: '#ca8a04', glow: '#facc15' },
@@ -24,7 +26,7 @@ export const validDate = (value) => typeof value === 'string' && DATE_FORMAT.tes
 export const emptyData = () => ({
   version: 2,
   disciplineRecords: [], expenseEntries: [], dailyMissions: [], importantEvents: [],
-  settings: { theme: 'dark', accentColor: 'orange', lang: 'ar', startDate: dateKey() },
+  settings: { theme: 'dark', accentColor: 'orange', lang: 'ar', startDate: dateKey(), userName: '', signature: '' },
 });
 
 export function normalizeData(raw) {
@@ -39,7 +41,7 @@ export function normalizeData(raw) {
   const expenses = new Map();
   for (const item of Array.isArray(raw.expenseEntries) ? raw.expenseEntries : []) {
     if (item && typeof item.id === 'string' && validDate(item.date) && typeof item.description === 'string' && item.description.trim() && Number.isFinite(item.amount) && item.amount > 0) {
-      expenses.set(item.id, { id: item.id, date: item.date, description: item.description.trim(), amount: Math.round(item.amount * 100) / 100 });
+      expenses.set(item.id, { id: item.id, date: item.date, description: item.description.trim(), amount: Math.round(item.amount * 100) / 100, purchasePeriod: PURCHASE_PERIODS.includes(item.purchasePeriod) ? item.purchasePeriod : 'unspecified' });
     }
   }
   data.expenseEntries = [...expenses.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -73,6 +75,8 @@ export function normalizeData(raw) {
   if (['dark', 'light', 'system'].includes(settings.theme)) data.settings.theme = settings.theme;
   if (accents.some((accent) => accent.id === settings.accentColor)) data.settings.accentColor = settings.accentColor;
   if (settings.lang === 'fr' || settings.lang === 'ar') data.settings.lang = settings.lang;
+  if (typeof settings.userName === 'string') data.settings.userName = settings.userName.trim().slice(0, 100);
+  if (typeof settings.signature === 'string' && settings.signature.length <= 600_000 && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(settings.signature)) data.settings.signature = settings.signature;
   const firstRecord = data.disciplineRecords[0]?.date;
   const startDate = validDate(settings.startDate) ? settings.startDate : (firstRecord || data.settings.startDate);
   const minStart = shiftDate(dateKey(), -36500);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Activity, AlarmClock, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Award, BarChart3, CalendarDays,
@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   accents, dateKey, emptyData, effectiveDay, eventDeadline, loadData, markableDay, normalizeData,
-  pad, points, saveData, shiftDate, streaks, syncData, uid,
+  pad, points, PURCHASE_PERIODS, purchasePeriodLabels, saveData, shiftDate, streaks, syncData, uid,
 } from './data.js';
 import { localeTag, tr } from './i18n.js';
 
@@ -84,6 +84,77 @@ function Modal({ open, title, close, children, wide = false }) {
 
 function Field({ label, children }) { return <label className="field"><span>{label}</span>{children}</label>; }
 function EmptyState({ icon: Icon = Sparkles, text }) { return <div className="empty-state"><span><Icon size={22}/></span><p>{text}</p></div>; }
+
+const SignaturePad = React.forwardRef(function SignaturePad({ value, onChange, t }, ref) {
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+  useImperativeHandle(ref, () => ({ read: () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return '';
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 3; index < pixels.length; index += 4) if (pixels[index] > 0) return canvas.toDataURL('image/png');
+    return '';
+  } }), []);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext('2d');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    if (value) {
+      const image = new Image();
+      image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      image.src = value;
+    }
+  }, [value]);
+  const position = (event) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return { x: (event.clientX - bounds.left) * event.currentTarget.width / bounds.width, y: (event.clientY - bounds.top) * event.currentTarget.height / bounds.height };
+  };
+  const start = (event) => {
+    event.preventDefault();
+    const canvas = event.currentTarget, context = canvas.getContext('2d'), point = position(event);
+    canvas.setPointerCapture(event.pointerId);
+    drawing.current = true;
+    context.beginPath(); context.moveTo(point.x, point.y); context.lineTo(point.x + .1, point.y + .1);
+    context.strokeStyle = '#27233d'; context.lineWidth = 4; context.lineCap = 'round'; context.lineJoin = 'round'; context.stroke();
+  };
+  const move = (event) => {
+    if (!drawing.current) return;
+    const context = event.currentTarget.getContext('2d'), point = position(event);
+    context.lineTo(point.x, point.y); context.stroke();
+  };
+  const finish = (event) => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    onChange(event.currentTarget.toDataURL('image/png'));
+  };
+  const clear = () => { const canvas = canvasRef.current; if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); onChange(''); };
+  return <div className="signature-field"><div className="signature-pad-wrap"><canvas ref={canvasRef} className="signature-pad" width="720" height="180" aria-label={t('ارسم توقيعك')} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}/><span className="signature-baseline"/></div><div className="signature-pad-actions"><small>{t('ارسم توقيعك هنا')}</small><button type="button" className="button subtle compact" onClick={clear}><RotateCcw size={14}/>{t('مسح التوقيع')}</button></div></div>;
+});
+
+function ProfileFields({ s, name, setName, signature, setSignature, padRef }) {
+  return <><Field label={s.t('الاسم الكامل')}><input required maxLength={100} autoComplete="name" autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={s.t('اكتب اسمك الكامل')}/></Field><Field label={s.t('التوقيع')}><SignaturePad ref={padRef} value={signature} onChange={setSignature} t={s.t}/></Field></>;
+}
+
+function ProfileSetup({ s, onSave }) {
+  const [name, setName] = useState(s.data.settings.userName || '');
+  const [signature, setSignature] = useState(s.data.settings.signature || '');
+  const [error, setError] = useState('');
+  const padRef = useRef(null);
+  const submit = (event) => {
+    event.preventDefault();
+    const drawn = padRef.current?.read() || signature;
+    if (!name.trim()) { setError(s.t('أدخل اسمك الكامل للمتابعة.')); return; }
+    if (!drawn) { setError(s.t('ارسم توقيعك قبل المتابعة.')); return; }
+    setError(''); onSave(name.trim(), drawn);
+  };
+  return <div className="profile-setup-scrim"><section className="profile-setup-card" role="dialog" aria-modal="true" aria-labelledby="profile-setup-title" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><div className="profile-setup-brand"><span className="brand-flame"><Flame size={20} fill="currentColor"/></span><span><b>FLAME</b><small>{s.t('ملف المستخدم')}</small></span></div><h1 id="profile-setup-title">{s.t('أكمل ملفك الشخصي')}</h1><p>{s.t('أدخل اسمك الكامل وارسم توقيعك للمتابعة.')}</p><form className="form-stack" onSubmit={submit}><ProfileFields s={s} name={name} setName={setName} signature={signature} setSignature={setSignature} padRef={padRef}/>{error && <p className="profile-form-error" role="alert">{error}</p>}<button className="button primary full-width" type="submit" disabled={!name.trim()}><Check size={17}/>{s.t('حفظ ومتابعة')}</button></form></section></div>;
+}
+
+function SiteFooter({ s }) {
+  if (!s.data.settings.userName) return null;
+  return <footer className="site-footer" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><div><small>{s.t('المستخدم')}</small><b>{s.data.settings.userName}</b></div><div className="site-footer-signature"><small>{s.t('التوقيع')}</small>{s.data.settings.signature && <img src={s.data.settings.signature} alt={s.t('توقيع المستخدم')}/>}</div><span className="site-footer-mark">FLAME <i>✦</i></span></footer>;
+}
 
 function Countdown({ event, large = false }) {
   const [now, setNow] = useState(Date.now());
@@ -242,11 +313,19 @@ function HistoryPage({ s }) {
 
 function DailyReport({ s, date, expenses, total, record, mission }) {
   const completed = mission?.tasks.filter((task) => task.completed).length ?? 0;
-  return <article className="print-report daily-report" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><ReportHeader s={s} title={s.t('تقرير اليوم')} subtitle={s.t('دفتر يومي للإنفاق والانضباط')} period={s.fd(date, { year: true })}/><div className="report-summary"><ReportStat label={s.t('إجمالي المصروف')} value={money(total, s.lang)} highlight/><ReportStat label={s.t('عدد المصاريف')} value={expenses.length}/><ReportStat label={s.t('نتيجة التحدي')} value={s.t(record?.status === 'success' ? 'أكملت التحدي' : record?.status === 'failure' ? 'ضيعت الوقت' : 'لم تسجل النتيجة')}/></div><ReportSection title={s.t('تفاصيل المصاريف')}><table className="report-table"><thead><tr><th>#</th><th>{s.t('الوصف')}</th><th>{s.t('السعر')} · MAD</th></tr></thead><tbody>{expenses.length ? expenses.map((entry, i) => <tr key={entry.id}><td>{pad(i + 1)}</td><td>{entry.description}</td><td className="amount-cell">{money(entry.amount, s.lang)}</td></tr>) : <tr><td colSpan="3" className="report-empty">{s.t('لا توجد مصاريف مسجلة لهذا اليوم.')}</td></tr>}</tbody><tfoot><tr><td colSpan="2">{s.t('الإجمالي')}</td><td className="amount-cell">{money(total, s.lang)}</td></tr></tfoot></table></ReportSection><ReportSection title={s.t('الانضباط والتحدي')}><div className="report-pair"><ReportStat label={s.t('نتيجة اليوم')} value={s.t(record?.status === 'success' ? 'أكملت التحدي' : record?.status === 'failure' ? 'ضيعت الوقت' : 'لم تسجل النتيجة')}/><ReportStat label={s.t('المهام اليومية')} value={mission ? `${completed} / ${mission.tasks.length} ${s.t('مكتملة')}` : s.t('لا توجد مهام لهذا اليوم')}/></div>{mission?.tasks.map((task) => <div className="report-task" key={task.id}><span>{task.completed ? '✓' : '○'}</span><span>{task.title}{task.description && <small>{task.description}</small>}</span><b>{s.t(task.completed ? 'مكتملة' : 'غير مكتملة')}</b></div>)}</ReportSection><ReportFooter s={s}/></article>;
+  return <article className="print-report daily-report" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><ReportHeader s={s} title={s.t('تقرير اليوم')} subtitle={s.t('دفتر يومي للإنفاق والانضباط')} period={s.fd(date, { year: true })}/><div className="report-summary"><ReportStat label={s.t('إجمالي المصروف')} value={money(total, s.lang)} highlight/><ReportStat label={s.t('عدد المصاريف')} value={expenses.length}/><ReportStat label={s.t('نتيجة التحدي')} value={s.t(record?.status === 'success' ? 'أكملت التحدي' : record?.status === 'failure' ? 'ضيعت الوقت' : 'لم تسجل النتيجة')}/></div><ReportSection title={s.t('تفاصيل المصاريف')}><table className="report-table"><thead><tr><th>{s.t('التاريخ')}</th><th>{s.t('فترة الشراء')}</th><th>{s.t('الوصف')}</th><th>{s.t('السعر')} · MAD</th></tr></thead><tbody>{expenses.length ? expenses.map((entry) => <tr key={entry.id}><td>{s.fd(entry.date, { year: true })}</td><td>{s.t(purchasePeriodLabels[entry.purchasePeriod] || purchasePeriodLabels.unspecified)}</td><td>{entry.description}</td><td className="amount-cell">{money(entry.amount, s.lang)}</td></tr>) : <tr><td colSpan="4" className="report-empty">{s.t('لا توجد مصاريف مسجلة لهذا اليوم.')}</td></tr>}</tbody><tfoot><tr><td colSpan="3">{s.t('الإجمالي')}</td><td className="amount-cell">{money(total, s.lang)}</td></tr></tfoot></table></ReportSection><ReportSection title={s.t('الانضباط والتحدي')}><div className="report-pair"><ReportStat label={s.t('نتيجة اليوم')} value={s.t(record?.status === 'success' ? 'أكملت التحدي' : record?.status === 'failure' ? 'ضيعت الوقت' : 'لم تسجل النتيجة')}/><ReportStat label={s.t('المهام اليومية')} value={mission ? `${completed} / ${mission.tasks.length} ${s.t('مكتملة')}` : s.t('لا توجد مهام لهذا اليوم')}/></div>{mission?.tasks.map((task) => <div className="report-task" key={task.id}><span>{task.completed ? '✓' : '○'}</span><span>{task.title}{task.description && <small>{task.description}</small>}</span><b>{s.t(task.completed ? 'مكتملة' : 'غير مكتملة')}</b></div>)}</ReportSection><ReportFooter s={s}/></article>;
 }
 
 function ReportHeader({ s, title, subtitle, period }) { return <header className="report-header"><div className="report-brand"><span className="report-logo">✦</span><span><b>FLAME</b><small>{subtitle}</small></span></div><div className="report-heading"><b>{title}</b><small>{period}</small></div></header>; }
-function ReportFooter({ s }) { return <footer className="report-footer"><b>FLAME</b><span>{s.t('وقت أوضح، ومال أوعى.')}</span><span>{s.t('تقرير شخصي')}</span></footer>; }
+function SiteStamp({ s }) {
+  const nameLength = Math.min(Math.max(s.data.settings.userName.length * 3.8, 25), 60);
+  return <svg className="site-stamp" viewBox="0 0 120 120" role="img" aria-label={s.t('ختم FLAME الرقمي')}>
+    <circle cx="60" cy="60" r="56"/><circle cx="60" cy="60" r="48"/><circle cx="60" cy="60" r="33"/>
+    <text className="stamp-user" x="60" y="51" textAnchor="middle" direction="rtl" unicodeBidi="plaintext" textLength={nameLength} lengthAdjust="spacingAndGlyphs">{s.data.settings.userName}</text>
+    <text className="stamp-center" x="60" y="69" textAnchor="middle">FLAME</text>
+  </svg>;
+}
+function ReportFooter({ s }) { return <><footer className="report-footer"><b>FLAME</b><span>{s.t('وقت أوضح، ومال أوعى.')}</span><span>{s.t('تقرير شخصي')}</span></footer><div className="report-authentication"><div className="report-signed-by"><small>{s.t('أُعدّ بواسطة')}</small><b>{s.data.settings.userName}</b><span>{s.t('التوقيع')}</span>{s.data.settings.signature && <img src={s.data.settings.signature} alt={s.t('توقيع المستخدم')}/>}</div><div className="report-stamp"><SiteStamp s={s}/></div></div></>; }
 function ReportStat({ label, value, highlight = false }) { return <div className={`report-stat ${highlight ? 'report-stat-highlight' : ''}`}><small>{label}</small><b>{value}</b></div>; }
 function ReportSection({ title, children }) { return <section className="report-section"><h2>{title}</h2>{children}</section>; }
 
@@ -254,6 +333,7 @@ function ExpensesPage({ s }) {
   const [date, setDate] = useState(s.today);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [purchasePeriod, setPurchasePeriod] = useState('morning');
   const [editing, setEditing] = useState(null);
   const expenses = s.data.expenseEntries.filter((entry) => entry.date === date).sort((a, b) => a.id.localeCompare(b.id));
   const total = expenses.reduce((sum, entry) => sum + entry.amount, 0);
@@ -261,15 +341,15 @@ function ExpensesPage({ s }) {
   const mission = s.data.dailyMissions.find((entry) => entry.scheduledDate === date);
   const parsedAmount = Number(amount);
   const canSave = !!description.trim() && Number.isFinite(parsedAmount) && parsedAmount >= 0.01 && Math.round(parsedAmount * 100) === parsedAmount * 100 && date <= s.today;
-  const reset = () => { setEditing(null); setDescription(''); setAmount(''); };
-  const save = (event) => { event.preventDefault(); if (!canSave) return; if (editing) s.updateExpense(editing, description, parsedAmount); else s.addExpense(date, description, parsedAmount); reset(); };
+  const reset = () => { setEditing(null); setDescription(''); setAmount(''); setPurchasePeriod('morning'); };
+  const save = (event) => { event.preventDefault(); if (!canSave) return; if (editing) s.updateExpense(editing, description, parsedAmount, purchasePeriod); else s.addExpense(date, description, parsedAmount, purchasePeriod); reset(); };
   const changeDate = (value) => { setDate(value); reset(); };
-  const editExpense = (entry) => { setEditing(entry.id); setDescription(entry.description); setAmount(String(entry.amount)); };
+  const editExpense = (entry) => { setEditing(entry.id); setDescription(entry.description); setAmount(String(entry.amount)); setPurchasePeriod(PURCHASE_PERIODS.includes(entry.purchasePeriod) ? entry.purchasePeriod : 'morning'); };
   return <div className="page-stack"><div className="page-title-row"><div><span className="eyebrow">FLAME · WALLET</span><h1>{s.t('المصاريف اليومية')}</h1></div><span className="title-icon"><Receipt size={20}/></span></div>
     <section className="panel date-panel"><Field label={s.t('اختر اليوم')}><input type="date" max={s.today} value={date} onChange={(event) => changeDate(event.target.value)}/></Field><p>{s.fd(date, { year: true })}</p></section>
     <section className="panel expense-total"><span>{s.t('إجمالي المصروف')}</span><b dir="auto">{money(total, s.lang)}</b><small>{expenses.length} {s.t(expenses.length === 1 ? 'مصروف' : 'مصروفات')}</small></section>
-    <form className="panel form-panel" onSubmit={save}><h2>{s.t(editing ? 'تعديل المصروف' : 'أضف مصروفاً')}</h2><Field label={s.t('وصف المصروف')}><input required maxLength={120} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={s.t('مثال: وجبة الغداء')}/></Field><Field label={`${s.t('السعر')} · MAD`}><input type="number" min="0.01" step="0.01" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00"/></Field><div className="form-actions"><button disabled={!canSave} className="button primary" type="submit">{editing ? <Check size={16}/> : <Plus size={17}/>} {s.t(editing ? 'حفظ التعديل' : 'أضف إلى اليوم')}</button>{editing && <button className="button subtle" type="button" onClick={reset}>{s.t('إلغاء التعديل')}</button>}</div></form>
-    <section className="panel expense-list-panel"><div className="section-heading"><span className="heading-icon"><Receipt size={18}/></span><div><h2>{s.t('تفاصيل المصاريف')}</h2><p>{expenses.length} {s.t('مصروفات')}</p></div></div>{expenses.length ? <div className="expense-list">{expenses.map((entry, index) => <div className="expense-row" key={entry.id}><span className="expense-index">{pad(index + 1)}</span><div className="expense-name"><b>{entry.description}</b><small>{money(entry.amount, s.lang)}</small></div><button className="icon-button" aria-label={s.t('تعديل')} onClick={() => editExpense(entry)}><Pencil size={15}/></button><button className="icon-button icon-danger" aria-label={s.t('حذف المصروف؟')} onClick={() => { if (window.confirm(s.t('حذف المصروف؟'))) { s.deleteExpense(entry.id); if (editing === entry.id) reset(); } }}><Trash2 size={15}/></button></div>)}</div> : <EmptyState icon={Receipt} text={s.t('لا توجد مصاريف مسجلة لهذا اليوم.')}/>}</section>
+    <form className="panel form-panel" onSubmit={save}><h2>{s.t(editing ? 'تعديل المصروف' : 'أضف مصروفاً')}</h2><Field label={s.t('وصف المصروف')}><input required maxLength={120} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={s.t('مثال: وجبة الغداء')}/></Field><div className="field-grid"><Field label={`${s.t('السعر')} · MAD`}><input type="number" min="0.01" step="0.01" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00"/></Field><Field label={s.t('فترة الشراء')}><select required value={purchasePeriod} onChange={(event) => setPurchasePeriod(event.target.value)}>{PURCHASE_PERIODS.map((period) => <option key={period} value={period}>{s.t(purchasePeriodLabels[period])}</option>)}</select></Field></div><div className="form-actions"><button disabled={!canSave} className="button primary" type="submit">{editing ? <Check size={16}/> : <Plus size={17}/>} {s.t(editing ? 'حفظ التعديل' : 'أضف إلى اليوم')}</button>{editing && <button className="button subtle" type="button" onClick={reset}>{s.t('إلغاء التعديل')}</button>}</div></form>
+    <section className="panel expense-list-panel"><div className="section-heading"><span className="heading-icon"><Receipt size={18}/></span><div><h2>{s.t('تفاصيل المصاريف')}</h2><p>{expenses.length} {s.t('مصروفات')}</p></div></div>{expenses.length ? <div className="expense-list">{expenses.map((entry, index) => <div className="expense-row" key={entry.id}><span className="expense-index">{pad(index + 1)}</span><div className="expense-name"><b>{entry.description}</b><small>{s.fd(entry.date, { year: true })} · {s.t(purchasePeriodLabels[entry.purchasePeriod] || purchasePeriodLabels.unspecified)} · {money(entry.amount, s.lang)}</small></div><button className="icon-button" aria-label={s.t('تعديل')} onClick={() => editExpense(entry)}><Pencil size={15}/></button><button className="icon-button icon-danger" aria-label={s.t('حذف المصروف؟')} onClick={() => { if (window.confirm(s.t('حذف المصروف؟'))) { s.deleteExpense(entry.id); if (editing === entry.id) reset(); } }}><Trash2 size={15}/></button></div>)}</div> : <EmptyState icon={Receipt} text={s.t('لا توجد مصاريف مسجلة لهذا اليوم.')}/>}</section>
     <section className="panel print-action"><div><h2>{s.t('تقرير اليوم PDF')}</h2><p>{s.t('يجمع التقرير مصاريف اليوم ونتيجة التحدي والمهام.')}</p></div><button className="button primary full-width" onClick={() => printSelected('daily', `FLAME-${date}`)}><Download size={17}/>{s.t('طباعة أو حفظ PDF')}</button></section>
     {createPortal(<DailyReport s={s} date={date} expenses={expenses} total={total} record={record} mission={mission}/>, document.getElementById('print-area'))}
   </div>;
@@ -277,7 +357,13 @@ function ExpensesPage({ s }) {
 
 function WeeklyReport({ s, start, end, expenses, missions, completed, totalTasks, wins, losses, spent, expensesOnly = false }) {
   const allTasks = missions.flatMap((mission) => mission.tasks.map((task) => ({ date: mission.scheduledDate, task })));
-  return <article className={`print-report ${expensesOnly ? 'expense-only-report' : 'weekly-report'}`} dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><ReportHeader s={s} title={s.t(expensesOnly ? 'تقرير المصاريف الأسبوعي' : 'التقرير الأسبوعي')} subtitle={s.t(expensesOnly ? 'تقرير المصاريف فقط' : 'دفتر أسبوعي للإنفاق والإنجاز')} period={`${s.fd(start, { year: true })} — ${s.fd(end, { year: true })}`}/><div className="report-summary">{expensesOnly ? <><ReportStat label={s.t('إجمالي المصروف')} value={money(spent, s.lang)} highlight/><ReportStat label={s.t('عدد المصاريف')} value={expenses.length}/></> : <><ReportStat label={s.t('إجمالي المصروف')} value={money(spent, s.lang)} highlight/><ReportStat label={s.t('المهام المكتملة')} value={`${completed} / ${totalTasks}`}/><ReportStat label={s.t('عدد المصاريف')} value={expenses.length}/><ReportStat label={s.t('أيام الانضباط')} value={`${wins} ${s.t('نجاح')} · ${losses} ${s.t('خسارة')}`}/></>}</div><ReportSection title={s.t('تفاصيل مصاريف الأسبوع')}><table className="report-table"><thead><tr><th>{s.t('التاريخ')}</th><th>{s.t('الوصف')}</th><th>{s.t('السعر')} · MAD</th></tr></thead><tbody>{expenses.length ? expenses.map((entry) => <tr key={entry.id}><td>{s.fd(entry.date, { weekday: 'short' })}</td><td>{entry.description}</td><td className="amount-cell">{money(entry.amount, s.lang)}</td></tr>) : <tr><td colSpan="3" className="report-empty">{s.t('لا توجد مصاريف مسجلة لهذا الأسبوع.')}</td></tr>}</tbody><tfoot><tr><td colSpan="2">{s.t('الإجمالي')}</td><td className="amount-cell">{money(spent, s.lang)}</td></tr></tfoot></table></ReportSection>{!expensesOnly && <ReportSection title={s.t('المهام المنجزة خلال الأسبوع')}><table className="report-table"><thead><tr><th>{s.t('التاريخ')}</th><th>{s.t('المهمة')}</th><th>{s.t('الحالة')}</th></tr></thead><tbody>{allTasks.length ? allTasks.map(({ date, task }) => <tr key={`${date}-${task.id}`}><td>{s.fd(date, { weekday: 'short' })}</td><td>{task.title}{task.description && <small className="report-description">{task.description}</small>}</td><td className={task.completed ? 'text-success' : 'report-muted'}>{s.t(task.completed ? 'مكتملة' : 'غير مكتملة')}</td></tr>) : <tr><td colSpan="3" className="report-empty">{s.t('لا توجد مهام مسجلة لهذا الأسبوع.')}</td></tr>}</tbody></table></ReportSection>}<ReportFooter s={s}/></article>;
+  return <article className={`print-report ${expensesOnly ? 'expense-only-report' : 'weekly-report'}`} dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
+    <ReportHeader s={s} title={s.t(expensesOnly ? 'تقرير المصاريف الأسبوعي' : 'التقرير الأسبوعي')} subtitle={s.t(expensesOnly ? 'تقرير المصاريف فقط' : 'دفتر أسبوعي للإنفاق والإنجاز')} period={`${s.fd(start, { year: true })} — ${s.fd(end, { year: true })}`}/>
+    <div className="report-summary">{expensesOnly ? <><ReportStat label={s.t('إجمالي المصروف')} value={money(spent, s.lang)} highlight/><ReportStat label={s.t('عدد المصاريف')} value={expenses.length}/></> : <><ReportStat label={s.t('إجمالي المصروف')} value={money(spent, s.lang)} highlight/><ReportStat label={s.t('المهام المكتملة')} value={`${completed} / ${totalTasks}`}/><ReportStat label={s.t('عدد المصاريف')} value={expenses.length}/><ReportStat label={s.t('أيام الانضباط')} value={`${wins} ${s.t('نجاح')} · ${losses} ${s.t('خسارة')}`}/></>}</div>
+    <ReportSection title={s.t('تفاصيل مصاريف الأسبوع')}><table className="report-table"><thead><tr><th>{s.t('التاريخ')}</th><th>{s.t('فترة الشراء')}</th><th>{s.t('الوصف')}</th><th>{s.t('السعر')} · MAD</th></tr></thead><tbody>{expenses.length ? expenses.map((entry) => <tr key={entry.id}><td>{s.fd(entry.date, { year: true })}</td><td>{s.t(purchasePeriodLabels[entry.purchasePeriod] || purchasePeriodLabels.unspecified)}</td><td>{entry.description}</td><td className="amount-cell">{money(entry.amount, s.lang)}</td></tr>) : <tr><td colSpan="4" className="report-empty">{s.t('لا توجد مصاريف مسجلة لهذا الأسبوع.')}</td></tr>}</tbody><tfoot><tr><td colSpan="3">{s.t('الإجمالي')}</td><td className="amount-cell">{money(spent, s.lang)}</td></tr></tfoot></table></ReportSection>
+    {!expensesOnly && <ReportSection title={s.t('المهام المنجزة خلال الأسبوع')}><table className="report-table"><thead><tr><th>{s.t('التاريخ')}</th><th>{s.t('المهمة')}</th><th>{s.t('الحالة')}</th></tr></thead><tbody>{allTasks.length ? allTasks.map(({ date, task }) => <tr key={`${date}-${task.id}`}><td>{s.fd(date, { weekday: 'short' })}</td><td>{task.title}{task.description && <small className="report-description">{task.description}</small>}</td><td className={task.completed ? 'text-success' : 'report-muted'}>{s.t(task.completed ? 'مكتملة' : 'غير مكتملة')}</td></tr>) : <tr><td colSpan="3" className="report-empty">{s.t('لا توجد مهام مسجلة لهذا الأسبوع.')}</td></tr>}</tbody></table></ReportSection>}
+    <ReportFooter s={s}/>
+  </article>;
 }
 
 function WeeklyStats({ s }) {
@@ -295,6 +381,16 @@ function WeeklyStats({ s }) {
   return <><section className="panel weekly-panel"><div className="week-heading"><button className="icon-button" onClick={() => setWeekStart(shiftDate(weekStart, -7))} aria-label={s.t('الأسبوع السابق')}>{s.lang === 'ar' ? <ChevronRight/> : <ChevronLeft/>}</button><div><span className="eyebrow">FLAME · WEEKLY</span><h2>{s.t('التحصيل الأسبوعي')}</h2><p>{s.fd(weekStart, { month: 'short' })} — {s.fd(weekEnd, { month: 'short', year: true })}</p></div><button className="icon-button" disabled={weekStart >= currentStart} onClick={() => setWeekStart(shiftDate(weekStart, 7))} aria-label={s.t('الأسبوع التالي')}>{s.lang === 'ar' ? <ChevronLeft/> : <ChevronRight/>}</button></div><div className="weekly-metrics"><div className="weekly-metric total-metric"><span>{s.t('إجمالي المصروف')}</span><b>{money(spent, s.lang)}</b></div><div className="weekly-metric"><span>{s.t('المهام المكتملة')}</span><b>{completed} / {totalTasks}</b></div><div className="weekly-metric"><span>{s.t('عدد المصاريف')}</span><b>{expenses.length}</b></div><div className="weekly-metric"><span>{s.t('أيام النجاح')} / {s.t('أيام الخسارة')}</span><b><i className="text-success">{wins}</i> / <i className="text-danger">{losses}</i></b></div></div><p className="helper-text">{s.t('يبدأ الأسبوع يوم الإثنين وينتهي يوم الأحد.')}</p><div className="report-buttons"><button className="button primary" onClick={() => print('weekly')}><Download size={16}/>{s.t('التقرير الكامل PDF')}</button><button className="button subtle" onClick={() => print('expenses')}><Receipt size={16}/>{s.t('المصاريف فقط PDF')}</button></div><p className="helper-text center-text">{s.t('عند الطباعة اختر حفظ كملف PDF.')}</p></section>
     {createPortal(<><WeeklyReport s={s} start={weekStart} end={weekEnd} expenses={expenses} missions={missions} completed={completed} totalTasks={totalTasks} wins={wins} losses={losses} spent={spent}/><WeeklyReport s={s} start={weekStart} end={weekEnd} expenses={expenses} missions={missions} completed={completed} totalTasks={totalTasks} wins={wins} losses={losses} spent={spent} expensesOnly/></>, document.getElementById('print-area'))}
   </>;
+}
+
+function ProfileModal({ s, open, close }) {
+  const [name, setName] = useState('');
+  const [signature, setSignature] = useState('');
+  const [error, setError] = useState('');
+  const padRef = useRef(null);
+  useEffect(() => { if (open) { setName(s.data.settings.userName || ''); setSignature(s.data.settings.signature || ''); } }, [open, s.data.settings.userName, s.data.settings.signature]);
+  const submit = (event) => { event.preventDefault(); const drawn = padRef.current?.read() || signature; if (!name.trim()) { setError(s.t('أدخل اسمك الكامل للمتابعة.')); return; } if (!drawn) { setError(s.t('ارسم توقيعك قبل المتابعة.')); return; } s.setUserProfile(name.trim(), drawn); close(); };
+  return <Modal open={open} title={s.t('ملف المستخدم')} close={close} wide><form className="form-stack" onSubmit={submit}><ProfileFields s={s} name={name} setName={setName} signature={signature} setSignature={setSignature} padRef={padRef}/>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" disabled={!name.trim()}><Check size={16}/>{s.t('حفظ الملف الشخصي')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
 }
 
 function SettingsPage({ s, fileRef, onReset }) {
@@ -340,6 +436,7 @@ export default function App() {
   const [planOpen, setPlanOpen] = useState(false), [planEdit, setPlanEdit] = useState(null);
   const [eventOpen, setEventOpen] = useState(false), [eventEdit, setEventEdit] = useState(null);
   const [resetOpen, setResetOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const fileRef = useRef(null);
   const lang = data.settings.lang;
   const t = (text) => tr(text, lang);
@@ -381,11 +478,12 @@ export default function App() {
     updateEvent: (id, event) => update((current) => ({ ...current, importantEvents: current.importantEvents.map((item) => item.id === id && item.status === 'upcoming' ? { ...item, ...event, title: event.title.trim(), description: event.description.trim() || undefined, eventTime: event.eventTime || undefined } : item) })),
     deleteEvent: (id) => update((current) => ({ ...current, importantEvents: current.importantEvents.filter((item) => item.id !== id) })),
     completeEvent: (id) => update((current) => ({ ...current, importantEvents: current.importantEvents.map((item) => item.id === id && item.status === 'upcoming' ? { ...item, status: 'completed', completedAt: new Date().toISOString() } : item) })),
-    addExpense: (date, description, amount) => update((current) => date > today || !description.trim() || !Number.isFinite(amount) || amount <= 0 ? current : { ...current, expenseEntries: [...current.expenseEntries, { id: uid(), date, description: description.trim(), amount: Math.round(amount * 100) / 100 }] }),
-    updateExpense: (id, description, amount) => update((current) => !description.trim() || !Number.isFinite(amount) || amount <= 0 ? current : { ...current, expenseEntries: current.expenseEntries.map((item) => item.id === id && item.date <= today ? { ...item, description: description.trim(), amount: Math.round(amount * 100) / 100 } : item) }),
+    addExpense: (date, description, amount, purchasePeriod) => update((current) => date > today || !description.trim() || !Number.isFinite(amount) || amount <= 0 || !PURCHASE_PERIODS.includes(purchasePeriod) ? current : { ...current, expenseEntries: [...current.expenseEntries, { id: uid(), date, description: description.trim(), amount: Math.round(amount * 100) / 100, purchasePeriod }] }),
+    updateExpense: (id, description, amount, purchasePeriod) => update((current) => !description.trim() || !Number.isFinite(amount) || amount <= 0 || !PURCHASE_PERIODS.includes(purchasePeriod) ? current : { ...current, expenseEntries: current.expenseEntries.map((item) => item.id === id && item.date <= today ? { ...item, description: description.trim(), amount: Math.round(amount * 100) / 100, purchasePeriod } : item) }),
     deleteExpense: (id) => update((current) => ({ ...current, expenseEntries: current.expenseEntries.filter((item) => item.id !== id) })),
     setTheme: (theme) => update((current) => ({ ...current, settings: { ...current.settings, theme } })),
     setAccent: (accentColor) => update((current) => ({ ...current, settings: { ...current.settings, accentColor } })),
+    setUserProfile: (userName, signature) => update((current) => ({ ...current, settings: { ...current.settings, userName: userName.trim().slice(0, 100), signature } })),
     importData: (text) => { try { const imported = normalizeData(JSON.parse(text)); if (!imported) { window.alert(t('ملف غير صالح')); return false; } update(() => imported); window.alert(t('تم الاستيراد')); return true; } catch { window.alert(t('ملف غير صالح')); return false; } },
   }), [data, today, lang, score, currentStats.current, currentStats.best, wins, losses]);
 
@@ -434,10 +532,14 @@ export default function App() {
   const nav = [[Home,'الرئيسية','home'],[Activity,'السجل','history'],[Receipt,'المصاريف','expenses'],[CalendarDays,'المواعيد','events'],[BarChart3,'الإحصائيات','stats']];
   return <Ctx.Provider value={context}><div className="app-shell">
     <header className="app-header"><div className="header-brand"><span className="brand-flame"><Flame size={19} fill="currentColor"/></span><span><b>FLAME</b><small>KEEP YOUR FIRE</small></span></div><div className="header-actions"><div className="today-label"><b>{fd(today)}</b><small>{t('احمِ وقتك، واحفظ شعلتك.')}</small></div><button className="language-button" onClick={() => update((current) => ({ ...current, settings: { ...current.settings, lang: current.settings.lang === 'ar' ? 'fr' : 'ar' } }))}><Languages size={15}/>{lang === 'ar' ? 'FR' : 'AR'}</button></div></header>
+    {data.settings.userName && <button className="app-identity" dir={lang === 'ar' ? 'rtl' : 'ltr'} onClick={() => setProfileOpen(true)}><span>{t('المستخدم')}</span><b>{data.settings.userName}</b><Pencil size={14}/></button>}
     <main className="main-content">{tab === 'home' && <HomePage s={context} onPlan={() => openPlan()} onEvent={() => openEvent()} onWeekly={() => setTab('stats')}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)}/ >}</main>
+    <SiteFooter s={context}/>
     {(tab === 'home' || tab === 'events') && <button className="floating-add" aria-label={t(tab === 'home' ? 'مهمة جديدة' : 'موعد جديد')} onClick={() => tab === 'home' ? openPlan() : openEvent()}>{tab === 'home' ? <ListChecks size={20}/> : <CalendarPlus size={20}/>}</button>}
     <nav className="bottom-nav" aria-label="Navigation"><div>{nav.map(([Icon, label, id]) => <button key={id} className={tab === id ? 'nav-item nav-active' : 'nav-item'} onClick={() => setTab(id)}><Icon size={20}/><span>{t(label)}</span></button>)}</div></nav>
     <PlanModal s={context} open={planOpen} close={() => setPlanOpen(false)} editing={planEdit}/><EventModal s={context} open={eventOpen} close={() => setEventOpen(false)} editing={eventEdit}/>
+    <ProfileModal s={context} open={profileOpen} close={() => setProfileOpen(false)}/>
     <Modal open={resetOpen} title={t('مسح كل البيانات؟')} close={() => setResetOpen(false)}><p className="modal-copy">{t('سيتم حذف الانضباط والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p><div className="form-actions"><button className="button subtle" onClick={() => setResetOpen(false)}>{t('إلغاء')}</button><button className="button danger-solid" onClick={() => { const current = dataRef.current; const cleared = emptyData(); cleared.settings = { ...current.settings, startDate: dateKey() }; dataRef.current = cleared; setData(cleared); saveData(cleared); setResetOpen(false); }}>{t('نعم، امسح')}</button></div></Modal>
+    {(!data.settings.userName || !data.settings.signature) && <ProfileSetup s={context} onSave={s.setUserProfile}/>}
   </div></Ctx.Provider>;
 }
