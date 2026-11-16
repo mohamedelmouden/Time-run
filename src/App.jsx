@@ -156,23 +156,7 @@ function SiteFooter({ s }) {
   return <footer className="site-footer" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><div><small>{s.t('المستخدم')}</small><b>{s.data.settings.userName}</b></div><div className="site-footer-signature"><small>{s.t('التوقيع')}</small>{s.data.settings.signature && <img src={s.data.settings.signature} alt={s.t('توقيع المستخدم')}/>}</div><span className="site-footer-mark">FLAME <i>✦</i></span></footer>;
 }
 
-function AnalogCountdownClock({ hours, minutes, seconds }) {
-  const hourAngle = (hours % 12) * 30 + minutes * 0.5;
-  const minuteAngle = minutes * 6 + seconds * 0.1;
-  const secondAngle = seconds * 6;
-  return <svg className="countdown-analog-clock" viewBox="0 0 60 60" aria-hidden="true">
-    <circle className="analog-clock-bezel" cx="30" cy="30" r="29"/>
-    <circle className="analog-clock-face" cx="30" cy="30" r="27"/>
-    {Array.from({ length: 12 }, (_, index) => <line key={index} className={index % 3 === 0 ? 'analog-clock-major-tick' : 'analog-clock-tick'} x1="30" y1="6" x2="30" y2={index % 3 === 0 ? '11' : '9'} transform={`rotate(${index * 30} 30 30)`}/>)}
-    <text className="analog-clock-number" x="30" y="15" textAnchor="middle">12</text><text className="analog-clock-number" x="45" y="31.5" textAnchor="middle">3</text><text className="analog-clock-number" x="30" y="49" textAnchor="middle">6</text><text className="analog-clock-number" x="15" y="31.5" textAnchor="middle">9</text>
-    <line className="analog-clock-hour-hand" x1="30" y1="31" x2="30" y2="19" transform={`rotate(${hourAngle} 30 30)`}/>
-    <line className="analog-clock-minute-hand" x1="30" y1="31" x2="30" y2="12" transform={`rotate(${minuteAngle} 30 30)`}/>
-    <line className="analog-clock-second-hand" x1="30" y1="34" x2="30" y2="10" transform={`rotate(${secondAngle} 30 30)`}/>
-    <circle className="analog-clock-hub" cx="30" cy="30" r="2.6"/>
-  </svg>;
-}
-
-function Countdown({ event, large = false, split = false }) {
+function Countdown({ event, large = false }) {
   const [now, setNow] = useState(Date.now());
   const { t, lang } = useFlame();
   const gradientId = `countdown-${useId().replace(/:/g, '')}`;
@@ -199,7 +183,7 @@ function Countdown({ event, large = false, split = false }) {
     ? [{ value: hours, short: 'س', full: 'ساعة' }, { value: minutes, short: 'د', full: 'دقيقة' }, { value: seconds, short: 'ث', full: 'ثانية' }]
     : [{ value: hours, short: 'h', full: 'hours' }, { value: minutes, short: 'min', full: 'minutes' }, { value: seconds, short: 's', full: 'seconds' }];
   const accessibleTime = `${days > 0 ? `${days} ${t(days === 1 ? 'يوم' : 'أيام')}, ` : ''}${units.map((unit) => `${unit.value} ${unit.full}`).join(', ')}`;
-  return <div className={`countdown ${split ? 'countdown-split' : ''} ${large ? 'countdown-large' : ''} ${urgent ? 'countdown-critical' : ''} ${stateClass}`}>
+  return <div className={`countdown ${large ? 'countdown-large' : ''} ${urgent ? 'countdown-critical' : ''} ${stateClass}`}>
     <div className="countdown-ring">
       <span className="countdown-aura" aria-hidden="true"/>
       <svg viewBox="0 0 120 120" aria-hidden="true">
@@ -221,9 +205,9 @@ function Countdown({ event, large = false, split = false }) {
               : <span>{label}</span>}
       </div>
     </div>
-    {event.status === 'upcoming' && <div className="countdown-side"><AnalogCountdownClock hours={hours} minutes={minutes} seconds={seconds}/><div className="countdown-units" role="timer" aria-label={accessibleTime}>
+    {event.status === 'upcoming' && <div className="countdown-units" role="timer" aria-label={accessibleTime}>
       {units.map((unit) => <span className="countdown-unit" key={unit.short}><strong>{pad(unit.value)}</strong><small>{unit.short}</small></span>)}
-    </div></div>}
+    </div>}
   </div>;
 }
 
@@ -283,7 +267,7 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
 
     <section className="panel upcoming-panel">
       <div className="section-heading"><span className="heading-icon"><AlarmClock size={19}/></span><div><h2>{t('أقرب موعد')}</h2><p>{t('تذكّر ما ينتظرك')}</p></div><button className="button subtle compact" onClick={onEvent}><Plus size={15}/>{t('موعد')}</button></div>
-      {nextEvent ? <div className="next-event"><Countdown event={nextEvent} large split/><div className="next-event-info" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><span className="eyebrow">{t('أقرب موعد')}</span><h3>{nextEvent.title}</h3><p>{fd(nextEvent.eventDate, { year: true })}{nextEvent.eventTime ? ` · ${nextEvent.eventTime}` : ''}</p><span className={`priority-pill ${nextEvent.priority}`}>{t(CAT[nextEvent.category])} · {t(PRIORITIES[nextEvent.priority])}</span></div></div> : <EmptyState icon={CalendarDays} text={t('لا توجد مواعيد قادمة. أضف موعداً لتبقيه أمام عينيك.')}/>}
+      {nextEvent ? <div className="next-event"><Countdown event={nextEvent} large/><div className="next-event-info" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}><span className="eyebrow">{t('أقرب موعد')}</span><h3>{nextEvent.title}</h3><p>{fd(nextEvent.eventDate, { year: true })}{nextEvent.eventTime ? ` · ${nextEvent.eventTime}` : ''}</p><span className={`priority-pill ${nextEvent.priority}`}>{t(CAT[nextEvent.category])} · {t(PRIORITIES[nextEvent.priority])}</span></div></div> : <EmptyState icon={CalendarDays} text={t('لا توجد مواعيد قادمة. أضف موعداً لتبقيه أمام عينيك.')}/>}
       {upcomingEvents.length > 1 && <div className="event-mini-list">{upcomingEvents.slice(1, 4).map((event) => <div className="event-mini" key={event.id}><span className="mini-date">{fd(event.eventDate, { weekday: 'short' })}</span><b>{event.title}</b><span className="mini-left">{timeLeft(event)}</span></div>)}</div>}
     </section>
 
@@ -308,7 +292,7 @@ function EventsPage({ s, onEdit, onAdd }) {
   const live = s.data.importantEvents.filter((event) => event.status === 'upcoming').sort((a, b) => eventDeadline(a) - eventDeadline(b));
   const past = s.data.importantEvents.filter((event) => event.status !== 'upcoming').sort((a, b) => b.eventDate.localeCompare(a.eventDate));
   const card = (event) => <article className="event-card panel" key={event.id}>
-    <button className="event-card-main" onClick={() => setExpanded(expanded === event.id ? null : event.id)}><Countdown event={event} split/><span className="event-card-copy"><b>{event.title}</b><small>{s.fd(event.eventDate, { year: true })}{event.eventTime ? ` · ${event.eventTime}` : ''}</small><span className={`priority-pill ${event.priority}`}>{s.t(CAT[event.category])} · {s.t(PRIORITIES[event.priority])}</span></span><ChevronDown size={17} className={expanded === event.id ? 'chevron-open' : ''}/></button>
+    <button className="event-card-main" onClick={() => setExpanded(expanded === event.id ? null : event.id)}><Countdown event={event}/><span className="event-card-copy"><b>{event.title}</b><small>{s.fd(event.eventDate, { year: true })}{event.eventTime ? ` · ${event.eventTime}` : ''}</small><span className={`priority-pill ${event.priority}`}>{s.t(CAT[event.category])} · {s.t(PRIORITIES[event.priority])}</span></span><ChevronDown size={17} className={expanded === event.id ? 'chevron-open' : ''}/></button>
     {expanded === event.id && <div className="event-detail">{event.description && <p>{event.description}</p>}{event.status === 'upcoming' ? <div className="form-actions"><button className="button primary" onClick={() => s.completeEvent(event.id)}><Check size={16}/>{s.t('اكتمل')}</button><button className="button subtle" onClick={() => onEdit(event)}><Pencil size={15}/>{s.t('تعديل')}</button><button className="button danger-soft" onClick={() => window.confirm(s.t('حذف هذا الموعد؟')) && s.deleteEvent(event.id)}><Trash2 size={15}/>{s.t('حذف')}</button></div> : <div className="form-actions"><span className={event.status === 'completed' ? 'text-success' : 'text-danger'}>{s.t(event.status === 'completed' ? 'اكتمل' : 'انتهى الموعد')}</span><button className="button danger-soft" onClick={() => window.confirm(s.t('حذف هذا الموعد؟')) && s.deleteEvent(event.id)}><Trash2 size={15}/>{s.t('حذف')}</button></div>}</div>}
   </article>;
   return <div className="page-stack"><div className="page-title-row"><div><span className="eyebrow">FLAME · CALENDAR</span><h1>{s.t('الأحداث المهمة القادمة')}</h1></div><button className="button primary" onClick={() => onAdd()}><CalendarPlus size={17}/>{s.t('موعد')}</button></div>
