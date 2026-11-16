@@ -122,3 +122,25 @@
 .next-event .countdown-ring{order:0}.next-event-info{order:1}.next-event .countdown-side{order:2}
 .event-card-main .countdown-ring{order:0}.event-card-copy{order:1}.event-card-main .countdown-side{order:2}.event-card-main>svg:last-child{order:3}
 @media(max-width:390px){.next-event{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"info ring" "watch ring";gap:8px 10px;align-items:center;direction:ltr}.next-event .countdown-ring{grid-area:ring;order:initial}.next-event-info{grid-area:info;order:initial;width:100%;text-align:start}.next-event .countdown-side{grid-area:watch;order:initial;justify-self:start}}
+/* Keep timer widgets from squeezing event titles on phone-sized screens. */
+@media(max-width:600px){
+  .next-event{display:grid;grid-template-columns:minmax(0,1fr) 100px;grid-template-areas:"info ring" "watch ring";gap:8px 10px;align-items:center;direction:ltr}
+  .next-event .countdown-ring{grid-area:ring;order:initial;width:100px;height:100px}
+  .next-event .countdown-side{grid-area:watch;order:initial;justify-self:start;width:100px;gap:4px}
+  .next-event .countdown-analog-clock{width:100px;height:100px}
+  .next-event .countdown-side .countdown-units{width:100%;gap:3px}
+  .next-event-info{grid-area:info;order:initial;width:100%;min-width:0;flex:none;text-align:start}
+  .next-event-info h3{overflow-wrap:break-word;word-break:normal}
+  .next-event-info .priority-pill{margin-inline:0}
+  .event-card-main{display:grid;grid-template-columns:minmax(0,1fr) 18px 76px;grid-template-areas:"copy arrow ring" "watch arrow ring";align-items:center;gap:7px 9px;padding:8px;direction:ltr}
+  .event-card-main .countdown-ring{grid-area:ring;order:initial}
+  .event-card-main .countdown-side{grid-area:watch;order:initial;width:76px;justify-self:start}
+  .event-card-copy{grid-area:copy;order:initial;width:100%;min-width:0}
+  .event-card-copy>b{overflow-wrap:break-word;word-break:normal}
+  .event-card-main>svg:last-child{grid-area:arrow;order:initial;justify-self:center}
+}
+@media(max-width:390px){
+  .next-event{grid-template-columns:minmax(0,1fr) 88px}
+  .next-event .countdown-ring,.next-event .countdown-side,.next-event .countdown-analog-clock{width:88px;height:88px}
+  .next-event .countdown-side .countdown-units{gap:2px}
+}
