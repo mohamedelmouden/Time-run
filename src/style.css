@@ -132,12 +132,13 @@
   .next-event-info{grid-area:info;order:initial;width:100%;min-width:0;flex:none;text-align:start}
   .next-event-info h3{overflow-wrap:break-word;word-break:normal}
   .next-event-info .priority-pill{margin-inline:0}
-  .event-card-main{display:grid;grid-template-columns:minmax(0,1fr) 18px 76px;grid-template-areas:"copy arrow ring" "watch arrow ring";align-items:center;gap:7px 9px;padding:8px;direction:ltr}
+  .event-card-main{display:grid;grid-template-columns:minmax(0,1fr) 76px;grid-template-areas:"copy action" "watch ring";align-items:center;gap:9px 10px;padding:8px;direction:ltr}
   .event-card-main .countdown-ring{grid-area:ring;order:initial}
   .event-card-main .countdown-side{grid-area:watch;order:initial;width:76px;justify-self:start}
   .event-card-copy{grid-area:copy;order:initial;width:100%;min-width:0}
   .event-card-copy>b{overflow-wrap:break-word;word-break:normal}
-  .event-card-main>svg:last-child{grid-area:arrow;order:initial;justify-self:center}
+  .event-card-main>svg:last-child{grid-area:action;order:initial;justify-self:end;align-self:start}
+  .floating-add{display:none}
 }
 @media(max-width:390px){
   .next-event{grid-template-columns:minmax(0,1fr) 88px}
