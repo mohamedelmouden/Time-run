@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Activity, AlarmClock, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Award, BarChart3, CalendarDays,
   CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, CloudDownload,
-  Download, Flame, Home, Languages, ListChecks, Menu, Moon, Pencil, Plus, Receipt, RotateCcw, Settings2,
+  Download, Flame, Home, Languages, ListChecks, Menu, Moon, PartyPopper, Pencil, Plus, Receipt, RotateCcw, Settings2,
   ShieldCheck, Sparkles, Star, Sun, Target, Trash2, Upload, X,
 } from 'lucide-react';
 import {
@@ -17,6 +17,8 @@ const useFlame = () => useContext(Ctx);
 const CAT = { exam: 'امتحان', deadline: 'موعد نهائي', competition: 'مسابقة', appointment: 'موعد', personal: 'شخصي', other: 'أخرى' };
 const PRIORITIES = { normal: 'عادية', important: 'مهم', critical: 'حرجة' };
 const WIN_MESSAGES = ['أحسنت! شعلتك تكبر.', 'انضباطك يصنع الفرق.', 'يوم آخر في رصيدك. استمر ولا تستسلم.'];
+const VICTORY_VARIANTS = ['confetti', 'rings', 'orbit', 'flame', 'stars'];
+const VICTORY_ICONS = { confetti: PartyPopper, rings: Award, orbit: Star, flame: Flame, stars: Sparkles };
 
 function useDateLabel(language) {
   return (key, options = {}) => {
@@ -84,6 +86,20 @@ function Modal({ open, title, close, children, wide = false }) {
 
 function Field({ label, children }) { return <label className="field"><span>{label}</span>{children}</label>; }
 function EmptyState({ icon: Icon = Sparkles, text }) { return <div className="empty-state"><span><Icon size={22}/></span><p>{text}</p></div>; }
+
+function VictoryCelebration({ celebration, s }) {
+  const Icon = VICTORY_ICONS[celebration.variant];
+  return <div key={celebration.id} className={`victory-celebration victory-${celebration.variant}`} role="status" aria-live="polite">
+    <div className="victory-card" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="victory-art" aria-hidden="true">
+        <span className="victory-ring victory-ring-one"/><span className="victory-ring victory-ring-two"/>
+        {Array.from({ length: 12 }, (_, index) => <span className="victory-particle" key={index} style={{ '--particle-angle': `${index * 30}deg`, '--particle-distance': `${47 + (index % 3) * 12}px`, '--particle-delay': `${(index % 4) * 35}ms` }}>{celebration.variant === 'stars' ? '✦' : celebration.variant === 'flame' ? '🔥' : ''}</span>)}
+        <span className="victory-icon"><Icon size={42} strokeWidth={1.8}/></span>
+      </div>
+      <strong>{s.t('انتصرت!')}</strong><span>{s.t('يوم آخر من الانضباط')}</span>
+    </div>
+  </div>;
+}
 
 const SignaturePad = React.forwardRef(function SignaturePad({ value, onChange, t }, ref) {
   const canvasRef = useRef(null);
@@ -221,6 +237,10 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
   const canMark = !!markableDay();
   const [editMark, setEditMark] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [celebration, setCelebration] = useState(null);
+  const lastVictoryVariant = useRef(null);
+  const celebrationSequence = useRef(0);
+  const [planDate, setPlanDate] = useState(s.tomorrow);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraTitle, setExtraTitle] = useState('');
   const [extraDescription, setExtraDescription] = useState('');
@@ -238,8 +258,21 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
     s.recordDay(day, status);
     setEditMark(false);
     setFeedback(status === 'success' ? `+10 ${t('نقطة')} · ${t(WIN_MESSAGES[Math.floor(Math.random() * WIN_MESSAGES.length)])}` : `−10 ${t('نقطة')} · ${t('خسرت اليوم')}`);
+    if (status === 'success') {
+      const wins = s.data.disciplineRecords.filter((record) => record.status === 'success').length;
+      const preferredIndex = wins % VICTORY_VARIANTS.length;
+      const preferred = VICTORY_VARIANTS[preferredIndex];
+      const variant = preferred === lastVictoryVariant.current ? VICTORY_VARIANTS[(preferredIndex + 1) % VICTORY_VARIANTS.length] : preferred;
+      lastVictoryVariant.current = variant;
+      setCelebration({ id: ++celebrationSequence.current, variant });
+    }
     window.setTimeout(() => setFeedback(''), 3500);
   };
+  useEffect(() => {
+    if (!celebration) return undefined;
+    const timer = window.setTimeout(() => setCelebration(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [celebration]);
   return <div className="page-stack">
     {s.weeklyReminder && <section className="panel reminder-panel"><div className="reminder-copy"><span className="eyebrow">FLAME · WEEKLY</span><h2>{t('لا تنسَ تحصيل هذا الأسبوع')}</h2><p>{t('حدد فترة التقرير ومحتواه، ثم احفظه PDF.')}</p></div><button className="button primary" onClick={onWeekly}><Download size={17}/>{t('إعداد التقرير')}</button></section>}
     <section className="panel streak-panel">
@@ -255,6 +288,7 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
       </div>
       {feedback && <div className="feedback-chip">{feedback}</div>}
     </section>
+    {celebration && <VictoryCelebration celebration={celebration} s={s}/>}
 
     <section className="panel mission-panel">
       <div className="section-heading"><span className="heading-icon"><Target size={19}/></span><div><h2>{t('مهمتي اليوم')}</h2><p>{mission ? `${mission.tasks.filter((task) => task.completed).length} / ${mission.tasks.length} ${t('اكتملت')}` : t('لا توجد مهام لهذا اليوم، استعد لمهمتك القادمة.')}</p></div><strong className="completion-percent">{mission?.tasks.length ? Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100) : 0}%</strong></div>
@@ -271,8 +305,9 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
       {upcomingEvents.length > 1 && <div className="event-mini-list">{upcomingEvents.slice(1, 4).map((event) => <div className="event-mini" key={event.id}><span className="mini-date">{fd(event.eventDate, { weekday: 'short' })}</span><b>{event.title}</b><span className="mini-left">{timeLeft(event)}</span></div>)}</div>}
     </section>
 
-    <section className="coming-section"><div className="section-title-row"><div><span className="eyebrow">{t('التخطيط')}</span><h2>{t('مهام الغد والأيام القادمة')}</h2></div><button className="button primary compact" onClick={onPlan}><Plus size={15}/>{t('مهمة')}</button></div>
-      {upcoming.length ? <div className="plan-list">{upcoming.slice(0, 4).map((item) => <MissionCard key={item.id} mission={item} s={s} onEdit={() => onPlan(item)}/>)}</div> : <EmptyState icon={ListChecks} text={t('حضّر مهام الغد اليوم، وأوفِ بها غداً.')}/>}
+    <section className="coming-section"><div className="section-title-row"><div><span className="eyebrow">{t('التخطيط')}</span><h2>{t('مهامي حسب التاريخ')}</h2><p>{t('اختر تاريخاً وأضف مهاماً لأيام مختلفة.')}</p></div></div>
+      <div className="planner-controls"><label className="field planner-date-field"><span>{t('تاريخ المهام')}</span><input type="date" min={s.tomorrow} value={planDate} onChange={(event) => setPlanDate(event.target.value || s.tomorrow)}/></label><button className="button primary planner-add" onClick={() => onPlan(null, planDate)}><Plus size={15}/>{t('أضف لهذا التاريخ')}</button></div>
+      {upcoming.length ? <div className="plan-list">{upcoming.map((item) => <MissionCard key={item.id} mission={item} s={s} onEdit={() => onPlan(item)}/>)}</div> : <EmptyState icon={ListChecks} text={t('لا توجد مهام قادمة. اختر تاريخاً لإضافتها.')}/>}
     </section>
   </div>;
 }
@@ -464,10 +499,10 @@ function SettingsPage({ s, fileRef, onReset, onReport }) {
   </div>;
 }
 
-function PlanModal({ s, open, close, editing }) {
-  const [date, setDate] = useState(s.tomorrow);
+function PlanModal({ s, open, close, editing, initialDate }) {
+  const [date, setDate] = useState(initialDate || s.tomorrow);
   const [tasks, setTasks] = useState([{ title: '', description: '' }]);
-  useEffect(() => { if (open) { setDate(editing?.scheduledDate || s.tomorrow); setTasks(editing ? editing.tasks.map((task) => ({ ...task })) : [{ title: '', description: '' }]); } }, [open, editing?.id, s.tomorrow]);
+  useEffect(() => { if (open) { setDate(editing?.scheduledDate || initialDate || s.tomorrow); setTasks(editing ? editing.tasks.map((task) => ({ ...task })) : [{ title: '', description: '' }]); } }, [open, editing?.id, initialDate, s.tomorrow]);
   const update = (index, value) => setTasks((items) => items.map((task, i) => i === index ? { ...task, ...value } : task));
   const remove = (index) => setTasks((items) => items.filter((_, i) => i !== index));
   const submit = (event) => { event.preventDefault(); const filtered = tasks.filter((task) => task.title.trim()); if (!filtered.length || date <= s.today) return; if (editing) s.updateMission(editing.id, date, filtered); else s.addMission(date, filtered); close(); };
@@ -489,6 +524,7 @@ export default function App() {
   const [today, setToday] = useState(dateKey());
   const [tab, setTab] = useState('home');
   const [planOpen, setPlanOpen] = useState(false), [planEdit, setPlanEdit] = useState(null);
+  const [planInitialDate, setPlanInitialDate] = useState('');
   const [eventOpen, setEventOpen] = useState(false), [eventEdit, setEventEdit] = useState(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -584,17 +620,17 @@ export default function App() {
 
   const weeklyReminder = new Date().getDay() === 0 && (new Date().getHours() > 18 || (new Date().getHours() === 18 && new Date().getMinutes() >= 30));
   const context = { ...s, weeklyReminder, today, tomorrow };
-  const openPlan = (mission = null) => { setPlanEdit(mission); setPlanOpen(true); };
+  const openPlan = (mission = null, date = tomorrow) => { setPlanEdit(mission); setPlanInitialDate(mission?.scheduledDate || date || tomorrow); setPlanOpen(true); };
   const openEvent = (event = null) => { setEventEdit(event); setEventOpen(true); };
   const nav = [[Home,'الرئيسية','home'],[Activity,'السجل','history'],[Receipt,'المصاريف','expenses'],[CalendarDays,'المواعيد','events'],[BarChart3,'الإحصائيات','stats']];
   return <Ctx.Provider value={context}><div className="app-shell">
     <header className="app-header"><div className="header-brand"><span className="brand-flame"><Flame size={19} fill="currentColor"/></span><span><b>FLAME</b><small>KEEP YOUR FIRE</small></span></div><div className="header-actions"><div className="today-label"><b>{fd(today)}</b><small>{t('احمِ وقتك، واحفظ شعلتك.')}</small></div><button className="language-button" onClick={() => update((current) => ({ ...current, settings: { ...current.settings, lang: current.settings.lang === 'ar' ? 'fr' : 'ar' } }))}><Languages size={15}/>{lang === 'ar' ? 'FR' : 'AR'}</button></div></header>
     {data.settings.userName && <button className="app-identity" dir={lang === 'ar' ? 'rtl' : 'ltr'} onClick={() => setProfileOpen(true)}><span>{t('المستخدم')}</span><b>{data.settings.userName}</b><Pencil size={14}/></button>}
-    <main className="main-content">{tab === 'home' && <HomePage s={context} onPlan={() => openPlan()} onEvent={() => openEvent()} onWeekly={() => openReport()}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</main>
+    <main className="main-content">{tab === 'home' && <HomePage s={context} onPlan={openPlan} onEvent={() => openEvent()} onWeekly={() => openReport()}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</main>
     <SiteFooter s={context}/>
     {(tab === 'home' || tab === 'events') && <button className="floating-add" aria-label={t(tab === 'home' ? 'مهمة جديدة' : 'موعد جديد')} onClick={() => tab === 'home' ? openPlan() : openEvent()}>{tab === 'home' ? <ListChecks size={20}/> : <CalendarPlus size={20}/>}</button>}
     <nav className="bottom-nav" aria-label="Navigation"><div>{nav.map(([Icon, label, id]) => <button key={id} className={tab === id ? 'nav-item nav-active' : 'nav-item'} onClick={() => setTab(id)}><Icon size={20}/><span>{t(label)}</span></button>)}</div></nav>
-    <PlanModal s={context} open={planOpen} close={() => setPlanOpen(false)} editing={planEdit}/><EventModal s={context} open={eventOpen} close={() => setEventOpen(false)} editing={eventEdit}/>
+    <PlanModal s={context} open={planOpen} close={() => setPlanOpen(false)} editing={planEdit} initialDate={planInitialDate}/><EventModal s={context} open={eventOpen} close={() => setEventOpen(false)} editing={eventEdit}/>
     <ReportChooser s={context} open={reportOpen} close={() => setReportOpen(false)} initialDate={reportDate}/>
     <ProfileModal s={context} open={profileOpen} close={() => setProfileOpen(false)}/>
     <Modal open={resetOpen} title={t('مسح كل البيانات؟')} close={() => setResetOpen(false)}><p className="modal-copy">{t('سيتم حذف الانضباط والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p><div className="form-actions"><button className="button subtle" onClick={() => setResetOpen(false)}>{t('إلغاء')}</button><button className="button danger-solid" onClick={() => { const current = dataRef.current; const cleared = emptyData(); cleared.settings = { ...current.settings, startDate: dateKey() }; dataRef.current = cleared; setData(cleared); saveData(cleared); setResetOpen(false); }}>{t('نعم، امسح')}</button></div></Modal>
