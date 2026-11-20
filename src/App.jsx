@@ -177,53 +177,64 @@ function Countdown({ event, large = false }) {
   const { t, lang } = useFlame();
   const gradientId = `countdown-${useId().replace(/:/g, '')}`;
   useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(id); }, []);
+  const dayLength = 86400000;
   const end = eventDeadline(event).getTime();
   const remaining = Math.max(0, end - now);
   const totalSeconds = Math.floor(remaining / 1000);
-  const days = Math.floor(totalSeconds / 86400);
+  const days = Math.ceil(remaining / dayLength);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  const created = new Date(event.createdAt).getTime();
-  const span = end - created;
-  const percentage = event.status === 'completed' ? 1 : event.status === 'expired' ? 0 : span > 0 ? Math.min(1, Math.max(0, remaining / span)) : (remaining > 0 ? 1 : 0);
-  const circumference = 314.16;
-  const dashOffset = circumference * (1 - percentage);
-  const dotAngle = percentage * Math.PI * 2;
-  const dotX = 60 + 50 * Math.cos(dotAngle);
-  const dotY = 60 + 50 * Math.sin(dotAngle);
+  const createdValue = new Date(event.createdAt).getTime();
+  const created = Number.isFinite(createdValue) ? createdValue : now;
+  const cycleElapsed = event.status === 'upcoming' ? ((Math.max(0, now - created) % dayLength) / dayLength) : event.status === 'expired' ? 1 : 0;
+  const circumference = 2 * Math.PI * 52;
+  const ringLength = circumference * (1 - cycleElapsed);
+  const ringGap = Math.max(0.001, circumference * cycleElapsed);
+  const dotAngle = cycleElapsed * Math.PI * 2 - Math.PI / 2;
+  const dotX = 60 + 52 * Math.cos(dotAngle);
+  const dotY = 60 + 52 * Math.sin(dotAngle);
   const urgent = remaining < 3600000 && event.status === 'upcoming';
   const stateClass = event.status === 'completed' ? 'countdown-complete' : event.status === 'expired' ? 'countdown-expired' : '';
   const label = event.status === 'completed' ? t('اكتمل') : event.status === 'expired' ? t('انتهى الموعد') : t('متبقٍ');
-  const units = lang === 'ar'
-    ? [{ value: hours, short: 'س', full: 'ساعة' }, { value: minutes, short: 'د', full: 'دقيقة' }, { value: seconds, short: 'ث', full: 'ثانية' }]
-    : [{ value: hours, short: 'h', full: 'hours' }, { value: minutes, short: 'min', full: 'minutes' }, { value: seconds, short: 's', full: 'seconds' }];
-  const accessibleTime = `${days > 0 ? `${days} ${t(days === 1 ? 'يوم' : 'أيام')}, ` : ''}${units.map((unit) => `${unit.value} ${unit.full}`).join(', ')}`;
+  const accessibleTime = `${days} ${t(days === 1 ? 'يوم' : 'أيام')}, ${hours} ${t(hours === 1 ? 'ساعة' : 'ساعات')}, ${minutes} ${t(minutes === 1 ? 'دقيقة' : 'دقائق')}, ${seconds} ${t(seconds === 1 ? 'ثانية' : 'ثوان')}`;
+  const clockNow = new Date(now);
+  const secondAngle = clockNow.getSeconds() * 6;
+  const minuteAngle = (clockNow.getMinutes() + clockNow.getSeconds() / 60) * 6;
+  const hourAngle = ((clockNow.getHours() % 12) + clockNow.getMinutes() / 60 + clockNow.getSeconds() / 3600) * 30;
+  const numeral = (value) => new Intl.NumberFormat(localeTag(lang)).format(value);
   return <div className={`countdown ${large ? 'countdown-large' : ''} ${urgent ? 'countdown-critical' : ''} ${stateClass}`}>
     <div className="countdown-ring">
       <span className="countdown-aura" aria-hidden="true"/>
-      <svg viewBox="0 0 120 120" aria-hidden="true">
+      <svg viewBox="0 0 120 120" role="img" aria-label={accessibleTime}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="1" x2="1" y2="0"><stop className="countdown-stop-start" offset="0"/><stop className="countdown-stop-end" offset="1"/></linearGradient>
           <filter id={`${gradientId}-blur`} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.7"/></filter>
         </defs>
-        <circle className="countdown-rim" cx="60" cy="60" r="56"/>
-        <circle className="countdown-track" cx="60" cy="60" r="50"/>
-        <circle className="countdown-glow" cx="60" cy="60" r="50" stroke={`url(#${gradientId})`} filter={`url(#${gradientId}-blur)`} style={{ strokeDashoffset: dashOffset }}/>
-        <circle className="countdown-progress" cx="60" cy="60" r="50" stroke={`url(#${gradientId})`} style={{ strokeDashoffset: dashOffset }}/>
+        <circle className="countdown-rim" cx="60" cy="60" r="57"/>
+        <circle className="countdown-track" cx="60" cy="60" r="52"/>
+        <circle className="countdown-glow" cx="60" cy="60" r="52" stroke={`url(#${gradientId})`} filter={`url(#${gradientId}-blur)`} transform="rotate(-90 60 60)" style={{ strokeDasharray: `${ringLength} ${ringGap}`, strokeDashoffset: -circumference * cycleElapsed }}/>
+        <circle className="countdown-progress" cx="60" cy="60" r="52" stroke={`url(#${gradientId})`} transform="rotate(-90 60 60)" style={{ strokeDasharray: `${ringLength} ${ringGap}`, strokeDashoffset: -circumference * cycleElapsed }}/>
+        {Array.from({ length: 12 }, (_, index) => {
+          const number = index === 0 ? 12 : index;
+          const angle = index * Math.PI / 6 - Math.PI / 2;
+          return <text key={number} className="countdown-numeral" x={60 + Math.cos(angle) * 40} y={60 + Math.sin(angle) * 40} textAnchor="middle" dominantBaseline="central">{numeral(number)}</text>;
+        })}
+        <g className="countdown-clock-hands" aria-hidden="true">
+          <line className="countdown-hour-hand" x1="60" y1="64" x2="60" y2="39" transform={`rotate(${hourAngle} 60 60)`}/>
+          <line className="countdown-minute-hand" x1="60" y1="65" x2="60" y2="27" transform={`rotate(${minuteAngle} 60 60)`}/>
+          <line className="countdown-second-hand" x1="60" y1="69" x2="60" y2="23" transform={`rotate(${secondAngle} 60 60)`}/>
+          <circle className="countdown-hub" cx="60" cy="60" r="3.3"/>
+        </g>
         <circle className="countdown-dot-halo" cx={dotX} cy={dotY} r="5.5"/>
         <circle className="countdown-dot" cx={dotX} cy={dotY} r="2.8"/>
       </svg>
-      <div className="countdown-center">
+      <div className="countdown-center" role="timer" aria-live="off">
         {event.status === 'completed' ? <><strong>✓</strong><span>{label}</span></>
           : event.status === 'expired' ? <span>{label}</span>
-            : days > 0 ? <><strong>{new Intl.NumberFormat(localeTag(lang)).format(days)}</strong><span>{t(days === 1 ? 'يوم' : 'أيام')}</span></>
-              : <span>{label}</span>}
+            : <><strong>{numeral(days)}</strong><span>{t(days === 1 ? 'يوم' : 'أيام')}</span></>}
       </div>
     </div>
-    {event.status === 'upcoming' && <div className="countdown-units" role="timer" aria-label={accessibleTime}>
-      {units.map((unit) => <span className="countdown-unit" key={unit.short}><strong>{pad(unit.value)}</strong><small>{unit.short}</small></span>)}
-    </div>}
   </div>;
 }
 
@@ -380,6 +391,135 @@ function ReportFooter({ s }) { return <><footer className="report-footer"><b>FLA
 function ReportStat({ label, value, highlight = false }) { return <div className={`report-stat ${highlight ? 'report-stat-highlight' : ''}`}><small>{label}</small><b>{value}</b></div>; }
 function ReportSection({ title, children }) { return <section className="report-section"><h2>{title}</h2>{children}</section>; }
 
+function sumExpenses(entries) { return entries.reduce((total, entry) => total + entry.amount, 0); }
+
+function expenseDateLabel(key, language, options = {}) {
+  return new Intl.DateTimeFormat(localeTag(language), options).format(new Date(`${key}T12:00:00`));
+}
+
+function expenseChartSeries({ period, anchor, customStart, customEnd, expenses, s }) {
+  const byDate = new Map();
+  expenses.forEach((entry) => {
+    if (!byDate.has(entry.date)) byDate.set(entry.date, []);
+    byDate.get(entry.date).push(entry);
+  });
+  if (period === 'يومي') {
+    const points = [...PURCHASE_PERIODS, 'unspecified'].map((purchasePeriod) => {
+      const entries = (byDate.get(anchor) || []).filter((entry) => entry.purchasePeriod === purchasePeriod).sort((a, b) => a.id.localeCompare(b.id));
+      const value = sumExpenses(entries);
+      return { key: `${anchor}-${purchasePeriod}`, date: anchor, label: s.t(purchasePeriodLabels[purchasePeriod]), value, entries, high: value > 20 };
+    });
+    return { points, threshold: 20, rangeStart: anchor, rangeEnd: anchor };
+  }
+
+  let start, end, threshold;
+  if (period === 'أسبوعي') {
+    const weekday = new Date(`${anchor}T12:00:00`).getDay();
+    start = shiftDate(anchor, -((weekday + 6) % 7));
+    end = shiftDate(start, 6);
+    threshold = 50;
+  } else if (period === 'شهري') {
+    const [year, month] = anchor.split('-').map(Number);
+    start = `${year}-${pad(month)}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthEnd = `${year}-${pad(month)}-${pad(lastDay)}`;
+    const currentMonth = s.today.slice(0, 7) === anchor.slice(0, 7);
+    end = currentMonth && s.today < monthEnd ? s.today : monthEnd;
+    threshold = 100;
+  } else {
+    start = customStart;
+    end = customEnd;
+    if (!start || !end || start > end) return { points: [], threshold: 50, rangeStart: start, rangeEnd: end, invalid: true };
+    const rangeDays = Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1;
+    threshold = rangeDays === 1 ? 20 : rangeDays <= 7 ? 50 : 100;
+  }
+  end = end > s.today ? s.today : end;
+  if (start > end) return { points: [], threshold, rangeStart: start, rangeEnd: end, invalid: true };
+  const points = [];
+  for (let key = start; key <= end; key = shiftDate(key, 1)) {
+    const entries = (byDate.get(key) || []).sort((a, b) => a.id.localeCompare(b.id));
+    const value = sumExpenses(entries);
+    const label = period === 'أسبوعي'
+      ? expenseDateLabel(key, s.lang, { weekday: 'short' })
+      : period === 'شهري'
+        ? numeralDateDay(key, s.lang)
+        : expenseDateLabel(key, s.lang, { day: 'numeric', month: 'short' });
+    points.push({ key, date: key, label, value, entries, high: value > threshold });
+  }
+  return { points, threshold, rangeStart: start, rangeEnd: end };
+}
+
+function numeralDateDay(key, language) {
+  return new Intl.NumberFormat(localeTag(language)).format(Number(key.slice(-2)));
+}
+
+function ExpenseTrendChart({ s, anchor }) {
+  const [period, setPeriod] = useState('أسبوعي');
+  const [chartAnchor, setChartAnchor] = useState(anchor);
+  const [customStart, setCustomStart] = useState(shiftDate(s.today, -6));
+  const [customEnd, setCustomEnd] = useState(s.today);
+  const [selected, setSelected] = useState(null);
+  useEffect(() => setChartAnchor(anchor), [anchor]);
+  const series = expenseChartSeries({ period, anchor: chartAnchor, customStart, customEnd, expenses: s.data.expenseEntries, s });
+  const points = series.points;
+  const width = Math.max(360, (points.length - 1) * 48 + 72);
+  const height = 216, left = 35, right = 20, top = 20, bottom = 42;
+  const plotWidth = width - left - right, plotHeight = height - top - bottom;
+  const ceiling = Math.max(series.threshold, ...points.map((point) => point.value), 10);
+  const scaleTop = Math.ceil(ceiling / 50) * 50;
+  const coordinates = points.map((point, index) => ({
+    ...point,
+    x: left + (points.length <= 1 ? plotWidth / 2 : index * plotWidth / (points.length - 1)),
+    y: top + plotHeight - point.value / scaleTop * plotHeight,
+  }));
+  const line = coordinates.length ? coordinates.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`;
+    const previous = coordinates[index - 1];
+    const before = coordinates[index - 2] || previous;
+    const after = coordinates[index + 1] || point;
+    const firstX = previous.x + (point.x - before.x) / 6;
+    const firstY = previous.y + (point.y - before.y) / 6;
+    const secondX = point.x - (after.x - previous.x) / 6;
+    const secondY = point.y - (after.y - previous.y) / 6;
+    return `${path} C ${firstX} ${firstY}, ${secondX} ${secondY}, ${point.x} ${point.y}`;
+  }, '') : '';
+  const area = coordinates.length ? `${line} L ${coordinates[coordinates.length - 1].x} ${top + plotHeight} L ${coordinates[0].x} ${top + plotHeight} Z` : '';
+  const thresholdY = top + plotHeight - series.threshold / scaleTop * plotHeight;
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  const title = period === 'مخصص' && series.rangeStart && series.rangeEnd
+    ? `${s.fd(series.rangeStart, { year: true })} — ${s.fd(series.rangeEnd, { year: true })}`
+    : period === 'يومي' ? s.fd(chartAnchor, { year: true }) : period === 'أسبوعي' ? `${s.t('المصاريف حسب أيام الأسبوع')} · ${s.fd(series.rangeStart, { month: 'short' })} — ${s.fd(series.rangeEnd, { month: 'short', year: true })}` : s.fd(chartAnchor, { month: 'long', year: true });
+  const detailTitle = selected ? `${selected.label} · ${s.fd(selected.date, { year: true })}` : '';
+  return <>
+    <section className="panel expense-chart-panel" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="expense-chart-heading"><div><span className="eyebrow">FLAME · TREND</span><h2>{s.t('اتجاه المصاريف')}</h2><p>{title}</p></div><span className="expense-chart-icon"><Activity size={18}/></span></div>
+      <div className="segmented expense-chart-periods" role="group" aria-label={s.t('الفترة')}>
+        {['يومي', 'أسبوعي', 'شهري', 'مخصص'].map((value) => <button type="button" aria-pressed={period === value} className={period === value ? 'selected' : ''} key={value} onClick={() => setPeriod(value)}>{s.t(value)}</button>)}
+      </div>
+      {period === 'مخصص' ? <div className="expense-chart-range"><Field label={s.t('من')}><input type="date" max={s.today} value={customStart} onChange={(event) => setCustomStart(event.target.value)}/></Field><Field label={s.t('إلى')}><input type="date" max={s.today} value={customEnd} onChange={(event) => setCustomEnd(event.target.value)}/></Field></div>
+        : <div className="expense-chart-anchor"><Field label={s.t(period === 'شهري' ? 'الشهر المرجعي' : 'التاريخ المرجعي')}><input type={period === 'شهري' ? 'month' : 'date'} max={period === 'شهري' ? s.today.slice(0, 7) : s.today} value={period === 'شهري' ? chartAnchor.slice(0, 7) : chartAnchor} onChange={(event) => { const value = event.target.value; if (value) setChartAnchor(period === 'شهري' ? `${value}-01` : value); }}/></Field></div>}
+      <p className="expense-chart-threshold"><span className="expense-high-dot"/>{s.t('إنفاق مرتفع')} · {s.t('أكثر من')} {money(series.threshold, s.lang)} {period === 'يومي' ? `· ${s.t('لكل فترة شراء')}` : `· ${s.t('لليوم')}`}</p>
+      {series.invalid ? <p className="expense-chart-empty">{s.t('راجع نطاق التاريخ المختار.')}</p> : <div className="expense-chart-scroll">
+        {points.length ? <svg className="expense-chart-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={s.t('منحنى المصاريف')}>
+          <defs><linearGradient id="expenseChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--primary)" stopOpacity=".28"/><stop offset="1" stopColor="var(--primary)" stopOpacity=".015"/></linearGradient></defs>
+          {[0, .5, 1].map((fraction) => { const y = top + plotHeight * fraction; return <g key={fraction}><line className="expense-chart-grid" x1={left} y1={y} x2={width - right} y2={y}/><text className="expense-chart-y-label" x={left - 7} y={y + 3} textAnchor="end">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 0 }).format(Math.round(scaleTop * (1 - fraction)))}</text></g>; })}
+          <line className="expense-chart-threshold-line" x1={left} y1={thresholdY} x2={width - right} y2={thresholdY}/>
+          <path className="expense-chart-area" d={area}/><path className="expense-chart-line" d={line}/>
+          {coordinates.map((point, index) => <g className={`expense-chart-point ${point.high ? 'expense-chart-point-high' : ''}`} key={point.key} role="button" tabIndex="0" aria-label={`${point.label}: ${money(point.value, s.lang)}`} onClick={() => setSelected(point)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(point); } }}>
+            <title>{`${point.label}: ${money(point.value, s.lang)}`}</title><circle className="expense-chart-point-hit" cx={point.x} cy={point.y} r="12"/><circle className="expense-chart-point-dot" cx={point.x} cy={point.y} r={point.high ? 5.5 : 4.5}/>
+            {points.length <= 7 && <text className={`expense-chart-value ${point.high ? 'expense-chart-value-high' : ''}`} x={point.x} y={point.y - 11} textAnchor="middle">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 0 }).format(point.value)}</text>}
+            {(index % labelEvery === 0 || index === points.length - 1) && <text className="expense-chart-x-label" x={point.x} y={height - 13} textAnchor="middle">{point.label}</text>}
+          </g>)}
+        </svg> : <p className="expense-chart-empty">{s.t('لا توجد نقاط في هذه الفترة.')}</p>}
+      </div>}
+      <p className="expense-chart-hint">{s.t('اضغط على أي نقطة لعرض تفاصيلها.')}</p>
+    </section>
+    <Modal open={!!selected} title={detailTitle} close={() => setSelected(null)}>
+      {selected && <div className="expense-point-details"><div className={`expense-point-total ${selected.high ? 'expense-point-total-high' : ''}`}><span>{s.t('الإجمالي')}</span><b>{money(selected.value, s.lang)}</b></div>{selected.entries.length ? <div className="expense-point-list">{selected.entries.map((entry) => <div className="expense-point-row" key={entry.id}><div><b>{entry.description}</b><small>{s.t(purchasePeriodLabels[entry.purchasePeriod] || purchasePeriodLabels.unspecified)}</small></div><strong className={entry.amount > series.threshold ? 'expense-point-amount-high' : ''}>{money(entry.amount, s.lang)}</strong></div>)}</div> : <p className="expense-chart-empty">{s.t('لا توجد مصاريف في هذه النقطة.')}</p>}</div>}
+    </Modal>
+  </>;
+}
+
 function ExpensesPage({ s, onReport }) {
   const [date, setDate] = useState(s.today);
   const [description, setDescription] = useState('');
@@ -498,7 +638,7 @@ function SettingsPage({ s, fileRef, onReset, onReport }) {
     reader.readAsText(file);
   };
   return <div className="page-stack"><div className="page-title-row"><div><span className="eyebrow">FLAME · INSIGHTS</span><h1>{s.t('الإحصائيات')}</h1></div><span className="title-icon"><BarChart3 size={20}/></span></div>
-    <WeeklyStats s={s} onReport={onReport}/><section className="panel lifetime-panel"><span className="eyebrow">{s.t('النقاط التراكمية')}</span><b>{s.points}</b><p>+10 {s.t('لكل يوم انتصار')} · +20 {s.t('عند إتمام كل مهام اليوم')} · −10 {s.t('عند الخسارة')}</p></section><div className="stats-four">{[[s.t('الحالية'),s.current],[s.t('الأطول'),s.best],[s.t('أيام النجاح'),s.wins],[s.t('أيام الخسارة'),s.losses]].map(([label, value]) => <div className="panel stat-tile" key={label}><span>{label}</span><b>{value}</b></div>)}</div>
+    <WeeklyStats s={s} onReport={onReport}/><ExpenseTrendChart s={s} anchor={s.today}/><section className="panel lifetime-panel"><span className="eyebrow">{s.t('النقاط التراكمية')}</span><b>{s.points}</b><p>+10 {s.t('لكل يوم انتصار')} · +20 {s.t('عند إتمام كل مهام اليوم')} · −10 {s.t('عند الخسارة')}</p></section><div className="stats-four">{[[s.t('الحالية'),s.current],[s.t('الأطول'),s.best],[s.t('أيام النجاح'),s.wins],[s.t('أيام الخسارة'),s.losses]].map(([label, value]) => <div className="panel stat-tile" key={label}><span>{label}</span><b>{value}</b></div>)}</div>
     <div className="settings-heading"><span className="eyebrow">FLAME · SETUP</span><h2>{s.t('الإعدادات')}</h2></div><section className="panel settings-panel"><div className="settings-section-title"><span className="heading-icon"><Settings2 size={18}/></span><div><h2>{s.t('المظهر والتخصيص')}</h2><p>{s.t('سمة الواجهة')}</p></div></div><div className="segmented theme-segment">{[['dark', Moon, 'داكن'],['light', Sun, 'فاتح'],['system', Settings2, 'النظام']].map(([value, Icon, label]) => <button key={value} className={s.data.settings.theme === value ? 'selected' : ''} onClick={() => s.setTheme(value)}><Icon size={15}/>{s.t(label)}</button>)}</div><div className="settings-section-title accent-title"><span className="heading-icon"><Sparkles size={18}/></span><div><h3>{s.t('لون الموقع')}</h3><p>{s.t('البرتقالي هو اللون الافتراضي.')}</p></div></div><div className="accent-grid">{accents.map((accent) => <button className={`accent-option ${s.data.settings.accentColor === accent.id ? 'accent-selected' : ''}`} key={accent.id} onClick={() => s.setAccent(accent.id)}><i style={{ '--swatch': accent.primary, '--swatch-glow': accent.glow }}/><span>{s.t(accent.label)}</span>{s.data.settings.accentColor === accent.id && <Check size={14}/>}</button>)}</div></section>
     <section className="panel settings-panel"><div className="settings-section-title"><span className="heading-icon"><ShieldCheck size={18}/></span><div><h2>{s.t('البيانات والنسخ الاحتياطي')}</h2><p>{s.t('احفظ نسخة من بياناتك أو استعد نسخة سابقة.')}</p></div></div><div className="backup-actions"><button className="button subtle" onClick={exp}><CloudDownload size={16}/>{s.t('تصدير')} JSON</button><button className="button subtle" onClick={() => fileRef.current?.click()}><Upload size={16}/>{s.t('استيراد')} JSON</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(event) => { imp(event.target.files?.[0]); event.target.value = ''; }}/></div><p className="helper-text">{s.t('بياناتك محفوظة في هذا المتصفح وهذا الجهاز فقط، ولا توجد مزامنة بين الهاتف والحاسوب. استخدم التصدير والاستيراد لنقلها.')}</p></section>
     <section className="panel settings-panel danger-zone"><div className="settings-section-title"><span className="heading-icon danger-icon"><Trash2 size={18}/></span><div><h2>{s.t('إدارة البيانات')}</h2><p>{s.t('سيتم حذف الانضباط والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p></div></div><button className="button danger-outline full-width" onClick={onReset}>{s.t('مسح كل البيانات')}</button></section>

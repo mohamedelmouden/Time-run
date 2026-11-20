@@ -67,21 +67,12 @@
 @media print{.report-footer{margin-top:18px}.report-authentication{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:10px;padding:10px 4px 0;border-top:1px solid #dce1e7;break-inside:avoid;page-break-inside:avoid;color:#17202a}.report-signed-by{display:grid;grid-template-columns:auto 1fr;align-items:end;gap:3px 8px;min-width:0}.report-signed-by>small,.report-signed-by>span{color:#687386;font-size:8pt}.report-signed-by>b{font-size:10pt}.report-signed-by>span{grid-column:1}.report-signed-by>img{grid-column:2;grid-row:2/4;width:112px;height:45px;object-fit:contain;object-position:left center;border-bottom:1px solid #9ba3ad}.report-stamp{display:grid;justify-items:center;gap:2px;flex:none}.report-stamp>small{color:#a52d38;font-size:7pt}.site-stamp{width:76px;height:76px}.report-table td:nth-child(2){white-space:nowrap}.report-table th,.report-table td{padding:6px 7px}}
 @media print{.report-table td:nth-child(2){white-space:normal}}
 
-/* Stable countdown layout: ring with numeric hours, minutes and seconds below. */
+/* Countdown clock face and daily ring. */
 .countdown{height:auto;display:grid;align-content:start;justify-items:center;gap:6px;overflow:visible;direction:ltr}
 .countdown-ring{position:relative;width:76px;height:76px;flex:none}
 .countdown-ring>svg{display:block;width:100%;height:100%;transform:rotate(-90deg)}
 .countdown-large{width:126px;height:auto}
 .countdown-large .countdown-ring{width:126px;height:126px}
-.countdown-units{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;direction:ltr}
-.countdown-unit{min-width:0;display:grid;justify-items:center;align-content:center;gap:2px;padding:5px 2px 4px;border:1px solid color-mix(in srgb,var(--primary) 27%,var(--line));border-radius:8px;background:linear-gradient(155deg,color-mix(in srgb,var(--primary) 12%,var(--panel-raised)),color-mix(in srgb,var(--glow) 7%,var(--panel)));box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 2px 6px rgba(0,0,0,.12)}
-.countdown-unit strong{color:var(--glow);font:700 12px/1 system-ui,sans-serif;text-shadow:0 0 9px color-mix(in srgb,var(--glow) 28%,transparent)}
-.countdown-unit small{color:var(--muted);font:700 6px/1 system-ui,sans-serif}
-.countdown-critical .countdown-unit{border-color:color-mix(in srgb,var(--bad) 36%,var(--line));background:color-mix(in srgb,var(--bad) 9%,var(--panel))}
-.countdown-critical .countdown-unit strong{color:var(--bad);text-shadow:0 0 9px color-mix(in srgb,var(--bad) 30%,transparent)}
-.countdown-complete .countdown-unit strong{color:var(--ok)}
-.countdown-large .countdown-unit strong{font-size:17px}
-.countdown-large .countdown-unit small{font-size:7px}
 @media(max-width:600px){
   .next-event{display:grid;grid-template-columns:minmax(0,1fr) 100px;grid-template-areas:"info timer";gap:10px;align-items:center}
   .next-event-info{grid-area:info;width:100%;min-width:0;flex:none;text-align:start}
@@ -152,3 +143,76 @@
 .add-done-actions{display:grid;gap:7px;margin-top:13px}
 .add-done-actions .add-done{margin-top:0}
 .planner-cutoff-note{margin:-7px 0 10px}
+
+/* Daily countdown dial: the ring clears clockwise over one 24-hour cycle. */
+.countdown{width:112px;height:112px;display:block;overflow:visible}
+.countdown-ring{width:100%;height:100%}
+.countdown-ring>svg{transform:none;overflow:visible}
+.countdown-large{width:152px;height:152px}
+.countdown-large .countdown-ring{width:152px;height:152px}
+.countdown-numeral{fill:var(--muted);font:700 6px system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.countdown-large .countdown-numeral{font-size:7px}
+.countdown-clock-hands line{stroke-linecap:round;transition:transform .3s linear}
+.countdown-hour-hand{stroke:var(--text);stroke-width:2.7}
+.countdown-minute-hand{stroke:var(--primary);stroke-width:2}
+.countdown-second-hand{stroke:var(--bad);stroke-width:1.1}
+.countdown-hub{fill:var(--glow);stroke:var(--panel);stroke-width:1.2}
+.countdown-center{inset:50% auto auto 50%;width:42px;height:31px;transform:translate(-50%,-50%);align-content:center;gap:0;border:1px solid color-mix(in srgb,var(--primary) 24%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--panel) 82%,transparent);backdrop-filter:blur(5px);box-shadow:0 2px 9px rgba(0,0,0,.12)}
+.countdown-center strong{font-size:13px}
+.countdown-center span{margin-top:1px;font-size:7px}
+.countdown-large .countdown-center{width:48px;height:35px}
+.countdown-large .countdown-center strong{font-size:17px}
+.countdown-large .countdown-center span{font-size:8px}
+.countdown-complete .countdown-center strong{font-size:20px}
+.countdown-expired .countdown-center span{font-size:7px}
+.countdown-dot-halo{fill:var(--primary)}
+.countdown-dot{fill:var(--panel);stroke:var(--primary);stroke-width:2}
+.countdown-critical .countdown-dot{stroke:var(--bad)}
+.countdown-complete .countdown-progress,.countdown-complete .countdown-glow{stroke:var(--ok)}
+.countdown-expired .countdown-progress,.countdown-expired .countdown-glow{opacity:0}
+@media(max-width:600px){.next-event{grid-template-columns:minmax(0,1fr) 142px}.next-event .countdown{width:142px;height:142px}.next-event .countdown-ring{width:142px;height:142px}.event-card-main{grid-template-columns:minmax(0,1fr) 104px}.event-card-main .countdown{width:104px;height:104px}}
+@media(max-width:390px){.next-event{grid-template-columns:minmax(0,1fr) 126px}.next-event .countdown{width:126px;height:126px}.next-event .countdown-ring{width:126px;height:126px}.event-card-main{grid-template-columns:minmax(0,1fr) 96px}.event-card-main .countdown{width:96px;height:96px}}
+
+.expense-chart-panel{display:grid;gap:12px;overflow:hidden}
+.expense-chart-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.expense-chart-heading h2{margin:2px 0 0;font-size:16px}
+.expense-chart-heading p{margin:3px 0 0;color:var(--muted);font-size:11px}
+.expense-chart-icon{width:38px;height:38px;display:grid;place-items:center;flex:none;border:1px solid color-mix(in srgb,var(--primary) 25%,var(--line));border-radius:13px;background:color-mix(in srgb,var(--primary) 10%,var(--panel-raised));color:var(--primary)}
+.expense-chart-periods{grid-template-columns:repeat(4,minmax(0,1fr))}
+.expense-chart-periods button{min-width:0;font-size:10px}
+.expense-chart-anchor{max-width:240px}
+.expense-chart-range{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.expense-chart-anchor input,.expense-chart-range input{direction:ltr;text-align:start;color-scheme:dark}
+.light .expense-chart-anchor input,.light .expense-chart-range input{color-scheme:light}
+.expense-chart-threshold{display:flex;align-items:center;gap:6px;margin:0;color:var(--muted);font-size:10px}
+.expense-high-dot{width:8px;height:8px;flex:none;border-radius:50%;background:var(--bad);box-shadow:0 0 8px color-mix(in srgb,var(--bad) 35%,transparent)}
+.expense-chart-scroll{width:100%;overflow-x:auto;overflow-y:hidden;border-radius:14px;scrollbar-color:var(--track) transparent;scrollbar-width:thin}
+.expense-chart-svg{display:block;max-width:none;overflow:visible;direction:ltr}
+.expense-chart-grid{stroke:var(--line);stroke-width:1}
+.expense-chart-y-label,.expense-chart-x-label{fill:var(--muted);font:600 9px 'Tajawal',sans-serif;font-variant-numeric:tabular-nums}
+.expense-chart-threshold-line{stroke:var(--bad);stroke-width:1;stroke-dasharray:4 4;opacity:.75}
+.expense-chart-area{fill:url(#expenseChartFill)}
+.expense-chart-line{fill:none;stroke:var(--primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 5px color-mix(in srgb,var(--primary) 27%,transparent))}
+.expense-chart-point{cursor:pointer;outline:none}
+.expense-chart-point-hit{fill:transparent}
+.expense-chart-point-dot{fill:var(--panel);stroke:var(--primary);stroke-width:2.5;transition:r .15s ease,fill .15s ease}
+.expense-chart-point:hover .expense-chart-point-dot,.expense-chart-point:focus .expense-chart-point-dot{r:7;fill:var(--primary)}
+.expense-chart-point-high .expense-chart-point-dot{stroke:var(--bad);fill:var(--bad)}
+.expense-chart-point-high:hover .expense-chart-point-dot,.expense-chart-point-high:focus .expense-chart-point-dot{fill:var(--bad);r:7}
+.expense-chart-value{fill:var(--text);font:700 9px 'Tajawal',sans-serif;font-variant-numeric:tabular-nums;pointer-events:none}
+.expense-chart-value-high{fill:var(--bad)}
+.expense-chart-hint,.expense-chart-empty{margin:0;color:var(--muted);font-size:10px;line-height:1.5}
+.expense-chart-empty{text-align:center;padding:10px}
+.expense-point-details{display:grid;gap:12px}
+.expense-point-total{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel-raised)}
+.expense-point-total span{color:var(--muted);font-size:11px}
+.expense-point-total b{font-size:18px;color:var(--glow);font-variant-numeric:tabular-nums}
+.expense-point-total-high{border-color:color-mix(in srgb,var(--bad) 35%,var(--line));background:color-mix(in srgb,var(--bad) 8%,var(--panel-raised))}
+.expense-point-total-high b,.expense-point-amount-high{color:var(--bad)!important}
+.expense-point-list{display:grid;gap:7px;max-height:45dvh;overflow:auto}
+.expense-point-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 2px;border-bottom:1px solid var(--line)}
+.expense-point-row>div{min-width:0;display:grid;gap:3px}
+.expense-point-row>div b{overflow-wrap:anywhere;font-size:12px}
+.expense-point-row small{color:var(--muted);font-size:10px}
+.expense-point-row>strong{flex:none;font-size:12px;font-variant-numeric:tabular-nums}
+@media(max-width:390px){.expense-chart-periods button{font-size:9px;padding-inline:2px}.expense-chart-panel{padding:13px}.expense-chart-range{gap:7px}}
