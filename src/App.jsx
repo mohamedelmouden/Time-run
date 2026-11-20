@@ -242,14 +242,15 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
   const celebrationSequence = useRef(0);
   const [planDate, setPlanDate] = useState(s.tomorrow);
   const [extraOpen, setExtraOpen] = useState(false);
+  const [extraDate, setExtraDate] = useState('today');
   const [extraTitle, setExtraTitle] = useState('');
   const [extraDescription, setExtraDescription] = useState('');
   const allDone = !!mission?.tasks.length && mission.tasks.every((task) => task.completed);
   const submitExtra = (event) => {
     event.preventDefault();
     if (!extraTitle.trim()) return;
-    s.addTodayTask(extraTitle, extraDescription);
-    setExtraTitle(''); setExtraDescription(''); setExtraOpen(false);
+    s.addCompletedTask(extraTitle, extraDescription, extraDate === 'yesterday' ? s.yesterday : s.today);
+    setExtraTitle(''); setExtraDescription(''); setExtraOpen(false); setExtraDate('today');
   };
   const validate = (status) => {
     const day = markableDay();
@@ -295,8 +296,11 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
       {mission && <><div className="progress-track"><div className={allDone ? 'progress-fill complete' : 'progress-fill'} style={{ width: `${Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100)}%` }}/></div>
         <ul className="task-list">{mission.tasks.map((task) => <li key={task.id}><button className="task-toggle" onClick={() => s.toggleTask(mission.id, task.id)}><span className={`task-check ${task.completed ? 'checked' : ''}`}>{task.completed && <Check size={15}/>}</span><span className={`task-text ${task.completed ? 'is-complete' : ''}`}><b>{task.title}</b>{task.description && <small>{task.description}</small>}</span></button></li>)}</ul>
         {allDone && <div className="mission-complete"><Flame size={17} fill="currentColor"/>{t('أحسنت! لقد أوفيت بوعدك لنفسك.')} <b>+20</b></div>}</>}
-      <button className="button subtle full-width add-done" onClick={() => setExtraOpen((value) => !value)}><Plus size={17}/>{t('أضف مهمة أنجزتها اليوم')}</button>
-      {extraOpen && <form className="inline-form" onSubmit={submitExtra}><Field label={t('عنوان المهمة')}><input autoFocus required maxLength={100} value={extraTitle} onChange={(event) => setExtraTitle(event.target.value)} placeholder={t('مثال: ساعدت عائلتي')}/></Field><Field label={t('وصف (اختياري)')}><input maxLength={180} value={extraDescription} onChange={(event) => setExtraDescription(event.target.value)}/></Field><div className="form-actions"><button className="button primary" type="submit"><Check size={16}/>{t('أضفها إلى إنجازات اليوم')}</button><button type="button" className="button subtle" onClick={() => setExtraOpen(false)}>{t('إلغاء')}</button></div><p className="helper-text">{t('ستُضاف إلى مهام اليوم بحالة مكتملة.')}</p></form>}
+      <div className="add-done-actions">
+        <button className="button subtle full-width add-done" onClick={() => { setExtraDate('today'); setExtraOpen((value) => extraDate !== 'today' || !value); }}><Plus size={17}/>{t('أضف مهمة أنجزتها اليوم')}</button>
+        <button className="button subtle full-width add-done" onClick={() => { setExtraDate('yesterday'); setExtraOpen((value) => extraDate !== 'yesterday' || !value); }}><RotateCcw size={16}/>{t('أضف مهمة أنجزتها أمس')}</button>
+      </div>
+      {extraOpen && <form className="inline-form" onSubmit={submitExtra}><Field label={t('عنوان المهمة')}><input autoFocus required maxLength={100} value={extraTitle} onChange={(event) => setExtraTitle(event.target.value)} placeholder={t('مثال: ساعدت عائلتي')}/></Field><Field label={t('وصف (اختياري)')}><input maxLength={180} value={extraDescription} onChange={(event) => setExtraDescription(event.target.value)}/></Field><div className="form-actions"><button className="button primary" type="submit"><Check size={16}/>{t(extraDate === 'yesterday' ? 'أضفها إلى إنجازات أمس' : 'أضفها إلى إنجازات اليوم')}</button><button type="button" className="button subtle" onClick={() => { setExtraOpen(false); setExtraDate('today'); }}>{t('إلغاء')}</button></div><p className="helper-text">{t(extraDate === 'yesterday' ? 'ستُضاف إلى مهام أمس بحالة مكتملة.' : 'ستُضاف إلى مهام اليوم بحالة مكتملة.')}</p></form>}
     </section>
 
     <section className="panel upcoming-panel">
@@ -538,15 +542,19 @@ export default function App() {
   const wins = data.disciplineRecords.filter((record) => record.status === 'success').length;
   const losses = data.disciplineRecords.length - wins;
   const score = points(data);
+  const yesterday = shiftDate(today, -1);
   const tomorrow = shiftDate(today, 1);
   const openReport = (date = today) => { setReportDate(date); setReportOpen(true); };
-  const s = useMemo(() => ({ data, today, lang, t, fd, tomorrow, effective, points: score, current: currentStats.current, best: currentStats.best, wins, losses,
-    addTodayTask: (title, description) => update((current, currentDate) => {
-      const mission = current.dailyMissions.find((item) => item.scheduledDate === currentDate);
+  const s = useMemo(() => ({ data, today, yesterday, lang, t, fd, tomorrow, effective, points: score, current: currentStats.current, best: currentStats.best, wins, losses,
+    addCompletedTask: (title, description, requestedDate) => update((current, currentDate) => {
+      const missionDate = requestedDate === shiftDate(currentDate, -1) ? requestedDate : currentDate;
+      const mission = current.dailyMissions.find((item) => item.scheduledDate === missionDate);
       const task = { id: uid(), title: title.trim(), description: description.trim() || undefined, completed: true };
       if (!task.title) return current;
-      if (mission) return { ...current, dailyMissions: current.dailyMissions.map((item) => item.id === mission.id ? { ...item, status: 'active', tasks: [...item.tasks, task] } : item) };
-      return { ...current, dailyMissions: [...current.dailyMissions, { id: uid(), scheduledDate: currentDate, tasks: [task], status: 'active', createdAt: new Date().toISOString() }] };
+      if (mission) return { ...current, dailyMissions: current.dailyMissions.map((item) => item.id === mission.id ? { ...item, tasks: [...item.tasks, task] } : item) };
+      const createdAt = new Date().toISOString();
+      const archived = missionDate < currentDate;
+      return { ...current, dailyMissions: [...current.dailyMissions, { id: uid(), scheduledDate: missionDate, tasks: [task], status: archived ? 'archived' : 'active', createdAt, ...(archived ? { archivedAt: createdAt } : {}) }] };
     }),
     toggleTask: (missionId, taskId) => update((current, date) => ({ ...current, dailyMissions: current.dailyMissions.map((mission) => mission.id === missionId && mission.scheduledDate === date ? { ...mission, tasks: mission.tasks.map((task) => task.id === taskId ? { ...task, completed: !task.completed } : task) } : mission) })),
     recordDay: (date, status) => update((current) => ({ ...current, disciplineRecords: [...current.disciplineRecords.filter((record) => record.date !== date), { date, status }].sort((a, b) => a.date.localeCompare(b.date)) })),
@@ -578,7 +586,7 @@ export default function App() {
     setAccent: (accentColor) => update((current) => ({ ...current, settings: { ...current.settings, accentColor } })),
     setUserProfile: (userName, signature) => update((current) => ({ ...current, settings: { ...current.settings, userName: userName.trim().slice(0, 100), signature } })),
     importData: (text) => { try { const imported = normalizeData(JSON.parse(text)); if (!imported) { window.alert(t('ملف غير صالح')); return false; } update(() => imported); window.alert(t('تم الاستيراد')); return true; } catch { window.alert(t('ملف غير صالح')); return false; } },
-  }), [data, today, lang, score, currentStats.current, currentStats.best, wins, losses]);
+  }), [data, today, yesterday, lang, score, currentStats.current, currentStats.best, wins, losses]);
 
   function update(mutator) {
     const current = dataRef.current;
