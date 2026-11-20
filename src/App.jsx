@@ -230,8 +230,8 @@ function Countdown({ event, large = false }) {
 function HomePage({ s, onPlan, onEvent, onWeekly }) {
   const t = s.t, fd = s.fd, { current, best } = streaks(s.data.disciplineRecords, s.effective);
   const todayRecord = s.data.disciplineRecords.find((record) => record.date === (markableDay() || s.today));
-  const mission = s.data.dailyMissions.find((item) => item.scheduledDate === s.today);
-  const upcoming = s.data.dailyMissions.filter((item) => item.scheduledDate > s.today).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+  const mission = s.data.dailyMissions.find((item) => item.scheduledDate === s.effective);
+  const upcoming = s.data.dailyMissions.filter((item) => item.scheduledDate > s.effective).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
   const upcomingEvents = s.data.importantEvents.filter((event) => event.status === 'upcoming').sort((a, b) => eventDeadline(a) - eventDeadline(b));
   const nextEvent = upcomingEvents[0];
   const canMark = !!markableDay();
@@ -240,12 +240,13 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
   const [celebration, setCelebration] = useState(null);
   const lastVictoryVariant = useRef(null);
   const celebrationSequence = useRef(0);
-  const [planDate, setPlanDate] = useState(s.tomorrow);
+  const [planDate, setPlanDate] = useState(s.nextMissionDate);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraDate, setExtraDate] = useState('today');
   const [extraTitle, setExtraTitle] = useState('');
   const [extraDescription, setExtraDescription] = useState('');
   const allDone = !!mission?.tasks.length && mission.tasks.every((task) => task.completed);
+  useEffect(() => { if (planDate < s.nextMissionDate) setPlanDate(s.nextMissionDate); }, [planDate, s.nextMissionDate]);
   const submitExtra = (event) => {
     event.preventDefault();
     if (!extraTitle.trim()) return;
@@ -292,12 +293,12 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
     {celebration && <VictoryCelebration celebration={celebration} s={s}/>}
 
     <section className="panel mission-panel">
-      <div className="section-heading"><span className="heading-icon"><Target size={19}/></span><div><h2>{t('مهمتي اليوم')}</h2><p>{mission ? `${mission.tasks.filter((task) => task.completed).length} / ${mission.tasks.length} ${t('اكتملت')}` : t('لا توجد مهام لهذا اليوم، استعد لمهمتك القادمة.')}</p></div><strong className="completion-percent">{mission?.tasks.length ? Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100) : 0}%</strong></div>
+      <div className="section-heading"><span className="heading-icon"><Target size={19}/></span><div><h2>{t(s.effective === s.today ? 'مهمتي اليوم' : 'مهام الأمس حتى 08:00')}</h2><p>{mission ? `${fd(s.effective)} · ${mission.tasks.filter((task) => task.completed).length} / ${mission.tasks.length} ${t('اكتملت')}` : `${fd(s.effective)} · ${t('لا توجد مهام لهذا اليوم، استعد لمهمتك القادمة.')}`}</p></div><strong className="completion-percent">{mission?.tasks.length ? Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100) : 0}%</strong></div>
       {mission && <><div className="progress-track"><div className={allDone ? 'progress-fill complete' : 'progress-fill'} style={{ width: `${Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100)}%` }}/></div>
         <ul className="task-list">{mission.tasks.map((task) => <li key={task.id}><button className="task-toggle" onClick={() => s.toggleTask(mission.id, task.id)}><span className={`task-check ${task.completed ? 'checked' : ''}`}>{task.completed && <Check size={15}/>}</span><span className={`task-text ${task.completed ? 'is-complete' : ''}`}><b>{task.title}</b>{task.description && <small>{task.description}</small>}</span></button></li>)}</ul>
         {allDone && <div className="mission-complete"><Flame size={17} fill="currentColor"/>{t('أحسنت! لقد أوفيت بوعدك لنفسك.')} <b>+20</b></div>}</>}
       <div className="add-done-actions">
-        <button className="button subtle full-width add-done" onClick={() => { setExtraDate('today'); setExtraOpen((value) => extraDate !== 'today' || !value); }}><Plus size={17}/>{t('أضف مهمة أنجزتها اليوم')}</button>
+        {s.effective === s.today && <button className="button subtle full-width add-done" onClick={() => { setExtraDate('today'); setExtraOpen((value) => extraDate !== 'today' || !value); }}><Plus size={17}/>{t('أضف مهمة أنجزتها اليوم')}</button>}
         <button className="button subtle full-width add-done" onClick={() => { setExtraDate('yesterday'); setExtraOpen((value) => extraDate !== 'yesterday' || !value); }}><RotateCcw size={16}/>{t('أضف مهمة أنجزتها أمس')}</button>
       </div>
       {extraOpen && <form className="inline-form" onSubmit={submitExtra}><Field label={t('عنوان المهمة')}><input autoFocus required maxLength={100} value={extraTitle} onChange={(event) => setExtraTitle(event.target.value)} placeholder={t('مثال: ساعدت عائلتي')}/></Field><Field label={t('وصف (اختياري)')}><input maxLength={180} value={extraDescription} onChange={(event) => setExtraDescription(event.target.value)}/></Field><div className="form-actions"><button className="button primary" type="submit"><Check size={16}/>{t(extraDate === 'yesterday' ? 'أضفها إلى إنجازات أمس' : 'أضفها إلى إنجازات اليوم')}</button><button type="button" className="button subtle" onClick={() => { setExtraOpen(false); setExtraDate('today'); }}>{t('إلغاء')}</button></div><p className="helper-text">{t(extraDate === 'yesterday' ? 'ستُضاف إلى مهام أمس بحالة مكتملة.' : 'ستُضاف إلى مهام اليوم بحالة مكتملة.')}</p></form>}
@@ -310,7 +311,8 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
     </section>
 
     <section className="coming-section"><div className="section-title-row"><div><span className="eyebrow">{t('التخطيط')}</span><h2>{t('مهامي حسب التاريخ')}</h2><p>{t('اختر تاريخاً وأضف مهاماً لأيام مختلفة.')}</p></div></div>
-      <div className="planner-controls"><label className="field planner-date-field"><span>{t('تاريخ المهام')}</span><input type="date" min={s.tomorrow} value={planDate} onChange={(event) => setPlanDate(event.target.value || s.tomorrow)}/></label><button className="button primary planner-add" onClick={() => onPlan(null, planDate)}><Plus size={15}/>{t('أضف لهذا التاريخ')}</button></div>
+      <p className="helper-text planner-cutoff-note">{t('تبدأ مهام اليوم الجديد عند 08:00 صباحاً، ويمكنك إعدادها قبل ذلك.')}</p>
+      <div className="planner-controls"><label className="field planner-date-field"><span>{t('تاريخ المهام')}</span><input type="date" min={s.nextMissionDate} value={planDate} onChange={(event) => setPlanDate(event.target.value || s.nextMissionDate)}/></label><button className="button primary planner-add" onClick={() => onPlan(null, planDate)}><Plus size={15}/>{t('أضف لهذا التاريخ')}</button></div>
       {upcoming.length ? <div className="plan-list">{upcoming.map((item) => <MissionCard key={item.id} mission={item} s={s} onEdit={() => onPlan(item)}/>)}</div> : <EmptyState icon={ListChecks} text={t('لا توجد مهام قادمة. اختر تاريخاً لإضافتها.')}/>}
     </section>
   </div>;
@@ -468,7 +470,7 @@ function WeeklyStats({ s, onReport }) {
   const weekEnd = shiftDate(weekStart, 6);
   const currentStart = (() => { const day = (new Date(`${s.today}T12:00:00`).getDay() + 6) % 7; return shiftDate(s.today, -day); })();
   const expenses = s.data.expenseEntries.filter((entry) => entry.date >= weekStart && entry.date <= weekEnd && entry.date <= s.today);
-  const missions = s.data.dailyMissions.filter((mission) => mission.scheduledDate >= weekStart && mission.scheduledDate <= weekEnd && mission.scheduledDate <= s.today);
+  const missions = s.data.dailyMissions.filter((mission) => mission.scheduledDate >= weekStart && mission.scheduledDate <= weekEnd && mission.scheduledDate <= s.effective);
   const records = s.data.disciplineRecords.filter((record) => record.date >= weekStart && record.date <= weekEnd && record.date <= s.today);
   const completed = missions.reduce((total, mission) => total + mission.tasks.filter((task) => task.completed).length, 0);
   const totalTasks = missions.reduce((total, mission) => total + mission.tasks.length, 0);
@@ -504,13 +506,14 @@ function SettingsPage({ s, fileRef, onReset, onReport }) {
 }
 
 function PlanModal({ s, open, close, editing, initialDate }) {
-  const [date, setDate] = useState(initialDate || s.tomorrow);
+  const [date, setDate] = useState(initialDate || s.nextMissionDate);
   const [tasks, setTasks] = useState([{ title: '', description: '' }]);
-  useEffect(() => { if (open) { setDate(editing?.scheduledDate || initialDate || s.tomorrow); setTasks(editing ? editing.tasks.map((task) => ({ ...task })) : [{ title: '', description: '' }]); } }, [open, editing?.id, initialDate, s.tomorrow]);
+  useEffect(() => { if (open) { setDate(editing?.scheduledDate || initialDate || s.nextMissionDate); setTasks(editing ? editing.tasks.map((task) => ({ ...task })) : [{ title: '', description: '' }]); } }, [open, editing?.id, initialDate, s.nextMissionDate]);
+  useEffect(() => { if (date < s.nextMissionDate) setDate(s.nextMissionDate); }, [date, s.nextMissionDate]);
   const update = (index, value) => setTasks((items) => items.map((task, i) => i === index ? { ...task, ...value } : task));
   const remove = (index) => setTasks((items) => items.filter((_, i) => i !== index));
-  const submit = (event) => { event.preventDefault(); const filtered = tasks.filter((task) => task.title.trim()); if (!filtered.length || date <= s.today) return; if (editing) s.updateMission(editing.id, date, filtered); else s.addMission(date, filtered); close(); };
-  return <Modal open={open} title={s.t(editing ? 'تعديل المهمة' : 'مهمة جديدة')} close={close} wide><form className="form-stack" onSubmit={submit}><Field label={s.t('تاريخ المهمة')}><input type="date" min={s.tomorrow} value={date} onChange={(event) => setDate(event.target.value)}/></Field>{tasks.map((task, index) => <div className="task-editor" key={index}><div className="task-editor-head"><span>{s.t('المهمة')} {index + 1}</span>{tasks.length > 1 && <button type="button" className="icon-button icon-danger" onClick={() => remove(index)}><Trash2 size={15}/></button>}</div><Field label={s.t('عنوان المهمة')}><input maxLength={100} value={task.title} onChange={(event) => update(index, { title: event.target.value })} placeholder={s.t('عنوان المهمة')}/></Field><Field label={s.t('وصف (اختياري)')}><input maxLength={180} value={task.description || ''} onChange={(event) => update(index, { description: event.target.value })}/></Field></div>)}<button className="button subtle full-width" type="button" onClick={() => setTasks((items) => [...items, { title: '', description: '' }])}><Plus size={16}/>{s.t('أضف مهمة')}</button><div className="form-actions"><button className="button primary" type="submit" disabled={!tasks.some((task) => task.title.trim()) || date <= s.today}>{s.t(editing ? 'احفظ التعديلات' : 'احفظ المهمة')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
+  const submit = (event) => { event.preventDefault(); const filtered = tasks.filter((task) => task.title.trim()); if (!filtered.length || date < s.nextMissionDate) return; if (editing) s.updateMission(editing.id, date, filtered); else s.addMission(date, filtered); close(); };
+  return <Modal open={open} title={s.t(editing ? 'تعديل المهمة' : 'مهمة جديدة')} close={close} wide><form className="form-stack" onSubmit={submit}><Field label={s.t('تاريخ المهمة')}><input type="date" min={s.nextMissionDate} value={date} onChange={(event) => setDate(event.target.value)}/></Field>{tasks.map((task, index) => <div className="task-editor" key={index}><div className="task-editor-head"><span>{s.t('المهمة')} {index + 1}</span>{tasks.length > 1 && <button type="button" className="icon-button icon-danger" onClick={() => remove(index)}><Trash2 size={15}/></button>}</div><Field label={s.t('عنوان المهمة')}><input maxLength={100} value={task.title} onChange={(event) => update(index, { title: event.target.value })} placeholder={s.t('عنوان المهمة')}/></Field><Field label={s.t('وصف (اختياري)')}><input maxLength={180} value={task.description || ''} onChange={(event) => update(index, { description: event.target.value })}/></Field></div>)}<button className="button subtle full-width" type="button" onClick={() => setTasks((items) => [...items, { title: '', description: '' }])}><Plus size={16}/>{s.t('أضف مهمة')}</button><div className="form-actions"><button className="button primary" type="submit" disabled={!tasks.some((task) => task.title.trim()) || date < s.nextMissionDate}>{s.t(editing ? 'احفظ التعديلات' : 'احفظ المهمة')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
 }
 
 function EventModal({ s, open, close, editing }) {
@@ -526,6 +529,7 @@ export default function App() {
   const [data, setData] = useState(() => syncData(loadData()));
   const dataRef = useRef(data); dataRef.current = data;
   const [today, setToday] = useState(dateKey());
+  const [workDay, setWorkDay] = useState(() => effectiveDay());
   const [tab, setTab] = useState('home');
   const [planOpen, setPlanOpen] = useState(false), [planEdit, setPlanEdit] = useState(null);
   const [planInitialDate, setPlanInitialDate] = useState('');
@@ -537,15 +541,16 @@ export default function App() {
   const lang = data.settings.lang;
   const t = (text) => tr(text, lang);
   const fd = useDateLabel(lang);
-  const effective = effectiveDay();
+  const effective = workDay;
   const currentStats = streaks(data.disciplineRecords, effective);
   const wins = data.disciplineRecords.filter((record) => record.status === 'success').length;
   const losses = data.disciplineRecords.length - wins;
   const score = points(data);
   const yesterday = shiftDate(today, -1);
   const tomorrow = shiftDate(today, 1);
+  const nextMissionDate = shiftDate(effective, 1);
   const openReport = (date = today) => { setReportDate(date); setReportOpen(true); };
-  const s = useMemo(() => ({ data, today, yesterday, lang, t, fd, tomorrow, effective, points: score, current: currentStats.current, best: currentStats.best, wins, losses,
+  const s = useMemo(() => ({ data, today, yesterday, lang, t, fd, tomorrow, nextMissionDate, effective, points: score, current: currentStats.current, best: currentStats.best, wins, losses,
     addCompletedTask: (title, description, requestedDate) => update((current, currentDate) => {
       const missionDate = requestedDate === shiftDate(currentDate, -1) ? requestedDate : currentDate;
       const mission = current.dailyMissions.find((item) => item.scheduledDate === missionDate);
@@ -553,13 +558,13 @@ export default function App() {
       if (!task.title) return current;
       if (mission) return { ...current, dailyMissions: current.dailyMissions.map((item) => item.id === mission.id ? { ...item, tasks: [...item.tasks, task] } : item) };
       const createdAt = new Date().toISOString();
-      const archived = missionDate < currentDate;
+      const archived = missionDate < effectiveDay();
       return { ...current, dailyMissions: [...current.dailyMissions, { id: uid(), scheduledDate: missionDate, tasks: [task], status: archived ? 'archived' : 'active', createdAt, ...(archived ? { archivedAt: createdAt } : {}) }] };
     }),
-    toggleTask: (missionId, taskId) => update((current, date) => ({ ...current, dailyMissions: current.dailyMissions.map((mission) => mission.id === missionId && mission.scheduledDate === date ? { ...mission, tasks: mission.tasks.map((task) => task.id === taskId ? { ...task, completed: !task.completed } : task) } : mission) })),
+    toggleTask: (missionId, taskId) => update((current) => { const activeDate = effectiveDay(); return { ...current, dailyMissions: current.dailyMissions.map((mission) => mission.id === missionId && mission.scheduledDate === activeDate ? { ...mission, tasks: mission.tasks.map((task) => task.id === taskId ? { ...task, completed: !task.completed } : task) } : mission) }; }),
     recordDay: (date, status) => update((current) => ({ ...current, disciplineRecords: [...current.disciplineRecords.filter((record) => record.date !== date), { date, status }].sort((a, b) => a.date.localeCompare(b.date)) })),
     addMission: (date, tasks) => update((current) => {
-      if (date <= today) return current;
+      if (date <= effectiveDay()) return current;
       const clean = tasks.filter((task) => task.title.trim()).map((task) => ({ id: task.id || uid(), title: task.title.trim(), description: task.description?.trim() || undefined, completed: !!task.completed }));
       if (!clean.length) return current;
       const existing = current.dailyMissions.find((mission) => mission.scheduledDate === date && mission.status === 'upcoming');
@@ -568,13 +573,13 @@ export default function App() {
     }),
     updateMission: (id, date, tasks) => update((current) => {
       const existing = current.dailyMissions.find((mission) => mission.id === id);
-      if (!existing || existing.status !== 'upcoming' || existing.scheduledDate <= today || date <= today) return current;
+      if (!existing || existing.status !== 'upcoming' || existing.scheduledDate <= effectiveDay() || date <= effectiveDay()) return current;
       const clean = tasks.filter((task) => task.title.trim()).map((task) => ({ id: task.id || uid(), title: task.title.trim(), description: task.description?.trim() || undefined, completed: !!task.completed }));
       const other = current.dailyMissions.find((mission) => mission.id !== id && mission.scheduledDate === date && mission.status === 'upcoming');
       if (other) return { ...current, dailyMissions: current.dailyMissions.filter((mission) => mission.id !== id).map((mission) => mission.id === other.id ? { ...mission, tasks: [...mission.tasks, ...clean] } : mission) };
       return { ...current, dailyMissions: current.dailyMissions.map((mission) => mission.id === id ? { ...mission, scheduledDate: date, tasks: clean } : mission) };
     }),
-    deleteMission: (id) => update((current) => ({ ...current, dailyMissions: current.dailyMissions.filter((mission) => mission.id !== id || mission.status !== 'upcoming' || mission.scheduledDate <= today) })),
+    deleteMission: (id) => update((current) => ({ ...current, dailyMissions: current.dailyMissions.filter((mission) => mission.id !== id || mission.status !== 'upcoming' || mission.scheduledDate <= effectiveDay()) })),
     addEvent: (event) => update((current) => ({ ...current, importantEvents: [...current.importantEvents, { ...event, title: event.title.trim(), description: event.description.trim() || undefined, eventTime: event.eventTime || undefined, id: uid(), status: 'upcoming', createdAt: new Date().toISOString() }] })),
     updateEvent: (id, event) => update((current) => ({ ...current, importantEvents: current.importantEvents.map((item) => item.id === id && item.status === 'upcoming' ? { ...item, ...event, title: event.title.trim(), description: event.description.trim() || undefined, eventTime: event.eventTime || undefined } : item) })),
     deleteEvent: (id) => update((current) => ({ ...current, importantEvents: current.importantEvents.filter((item) => item.id !== id) })),
@@ -586,7 +591,7 @@ export default function App() {
     setAccent: (accentColor) => update((current) => ({ ...current, settings: { ...current.settings, accentColor } })),
     setUserProfile: (userName, signature) => update((current) => ({ ...current, settings: { ...current.settings, userName: userName.trim().slice(0, 100), signature } })),
     importData: (text) => { try { const imported = normalizeData(JSON.parse(text)); if (!imported) { window.alert(t('ملف غير صالح')); return false; } update(() => imported); window.alert(t('تم الاستيراد')); return true; } catch { window.alert(t('ملف غير صالح')); return false; } },
-  }), [data, today, yesterday, lang, score, currentStats.current, currentStats.best, wins, losses]);
+  }), [data, today, yesterday, nextMissionDate, effective, lang, score, currentStats.current, currentStats.best, wins, losses]);
 
   function update(mutator) {
     const current = dataRef.current;
@@ -595,6 +600,7 @@ export default function App() {
     dataRef.current = next;
     setData(next);
     setToday(currentDate);
+    setWorkDay(effectiveDay());
     saveData(next);
   }
 
@@ -602,6 +608,7 @@ export default function App() {
     const refresh = () => {
       const now = new Date(), currentDate = dateKey(now);
       setToday(currentDate);
+      setWorkDay(effectiveDay(now));
       const current = dataRef.current, next = syncData(current, currentDate, now);
       if (next !== current) { dataRef.current = next; setData(next); saveData(next); }
     };
@@ -627,8 +634,8 @@ export default function App() {
   }, [data.settings.theme]);
 
   const weeklyReminder = new Date().getDay() === 0 && (new Date().getHours() > 18 || (new Date().getHours() === 18 && new Date().getMinutes() >= 30));
-  const context = { ...s, weeklyReminder, today, tomorrow };
-  const openPlan = (mission = null, date = tomorrow) => { setPlanEdit(mission); setPlanInitialDate(mission?.scheduledDate || date || tomorrow); setPlanOpen(true); };
+  const context = { ...s, weeklyReminder, today, tomorrow, nextMissionDate };
+  const openPlan = (mission = null, date = nextMissionDate) => { setPlanEdit(mission); setPlanInitialDate(mission?.scheduledDate || date || nextMissionDate); setPlanOpen(true); };
   const openEvent = (event = null) => { setEventEdit(event); setEventOpen(true); };
   const nav = [[Home,'الرئيسية','home'],[Activity,'السجل','history'],[Receipt,'المصاريف','expenses'],[CalendarDays,'المواعيد','events'],[BarChart3,'الإحصائيات','stats']];
   return <Ctx.Provider value={context}><div className="app-shell">

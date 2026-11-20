@@ -113,8 +113,9 @@ export const eventDeadline = (event) => new Date(`${event.eventDate}T${event.eve
 
 export function syncData(data, today = dateKey(), now = new Date()) {
   let changed = false;
+  const missionDay = effectiveDay(now);
   const dailyMissions = data.dailyMissions.map((mission) => {
-    const status = mission.scheduledDate < today ? 'archived' : mission.scheduledDate === today ? 'active' : 'upcoming';
+    const status = mission.scheduledDate < missionDay ? 'archived' : mission.scheduledDate === missionDay ? 'active' : 'upcoming';
     if (status === mission.status) return mission;
     changed = true;
     return { ...mission, status, archivedAt: status === 'archived' ? (mission.archivedAt || now.toISOString()) : undefined };
