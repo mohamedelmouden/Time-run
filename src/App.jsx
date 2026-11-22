@@ -3,12 +3,12 @@ import { createPortal } from 'react-dom';
 import {
   Activity, AlarmClock, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Award, BarChart3, CalendarDays,
   CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, CloudDownload,
-  Download, Flame, Home, Languages, ListChecks, Menu, Moon, PartyPopper, Pencil, Plus, Receipt, RotateCcw, Settings2,
-  ShieldCheck, Sparkles, Star, Sun, Target, Trash2, Upload, X,
+  Download, Flame, Home, Languages, ListChecks, Menu, Moon, Pencil, Plus, Receipt, RotateCcw, Settings2,
+  ShieldCheck, Sparkles, Sun, Target, Trash2, Upload, X,
 } from 'lucide-react';
 import {
-  accents, dateKey, emptyData, effectiveDay, eventDeadline, loadData, markableDay, normalizeData,
-  pad, points, PURCHASE_PERIODS, purchasePeriodLabels, saveData, shiftDate, streaks, syncData, uid,
+  accents, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableDay, normalizeData,
+  pad, points, PURCHASE_PERIODS, purchasePeriodLabels, saveData, shiftDate, streaks, syncData, uid, validDate, weekdayIndex,
 } from './data.js';
 import { localeTag, tr } from './i18n.js';
 
@@ -16,9 +16,7 @@ const Ctx = createContext(null);
 const useFlame = () => useContext(Ctx);
 const CAT = { exam: 'امتحان', deadline: 'موعد نهائي', competition: 'مسابقة', appointment: 'موعد', personal: 'شخصي', other: 'أخرى' };
 const PRIORITIES = { normal: 'عادية', important: 'مهم', critical: 'حرجة' };
-const WIN_MESSAGES = ['أحسنت! شعلتك تكبر.', 'انضباطك يصنع الفرق.', 'يوم آخر في رصيدك. استمر ولا تستسلم.'];
-const VICTORY_VARIANTS = ['confetti', 'rings', 'orbit', 'flame', 'stars'];
-const VICTORY_ICONS = { confetti: PartyPopper, rings: Award, orbit: Star, flame: Flame, stars: Sparkles };
+const WEEKDAYS = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 
 function useDateLabel(language) {
   return (key, options = {}) => {
@@ -49,25 +47,6 @@ function printSelected(kind, fileName) {
   window.print();
 }
 
-function FireMark({ days }) {
-  const level = days === 0 ? 0 : days <= 3 ? 1 : days <= 7 ? 2 : days <= 14 ? 3 : days <= 30 ? 4 : 5;
-  return <div className={`fire-mark fire-level-${level}`} aria-hidden="true">
-    <svg viewBox="0 0 120 140">
-      <defs>
-        <radialGradient id="flameHalo" cx="50%" cy="76%" r="56%"><stop stopColor="#ffb629" stopOpacity=".72"/><stop offset=".38" stopColor="#ff5b12" stopOpacity=".28"/><stop offset="1" stopColor="#e92d10" stopOpacity="0"/></radialGradient>
-        <linearGradient id="flameOuter" x1=".18" y1=".05" x2=".82" y2=".96"><stop stopColor="#ffe75a"/><stop offset=".2" stopColor="#ff9d19"/><stop offset=".57" stopColor="#f44913"/><stop offset=".82" stopColor="#e82b13"/><stop offset="1" stopColor="#ff8c16"/></linearGradient>
-        <linearGradient id="flameTongue" x1=".28" y1=".08" x2=".72" y2=".98"><stop stopColor="#fff36b"/><stop offset=".38" stopColor="#ffc42d"/><stop offset=".76" stopColor="#ff6718"/><stop offset="1" stopColor="#f53b12"/></linearGradient>
-        <radialGradient id="flameCore" cx="50%" cy="70%" r="65%"><stop stopColor="#fffce0"/><stop offset=".38" stopColor="#fff080"/><stop offset=".76" stopColor="#ffc52b"/><stop offset="1" stopColor="#ff8a18"/></radialGradient>
-      </defs>
-      <ellipse className="fire-halo" cx="60" cy="106" rx="43" ry="27" fill="url(#flameHalo)"/>
-      <path className="fire-body" d="M61 7C54 21 59 35 68 48c6 9 12 15 13 24 5-5 5-13 2-21 13 15 20 31 17 48-3 21-19 35-40 35-22 0-38-15-40-36-2-17 7-31 19-44 0 11 3 19 8 25 2-15 11-25 16-38 5-12 3-24-2-34z" fill="url(#flameOuter)"/>
-      <path className="fire-tongue" d="M60 126c-17-2-28-14-27-29 1-9 6-17 13-25-1 11 5 16 10 22 4-8 5-15 3-23 10 12 15 21 13 33-1 10-6 18-12 22z" fill="url(#flameTongue)"/>
-      <path className="fire-core" d="M61 119c-10-8-11-17-5-27 4-6 7-12 7-20 9 10 15 18 14 29-1 9-7 16-16 18z" fill="url(#flameCore)"/>
-      <circle className="ember ember-a" cx="39" cy="77" r="1.4"/><circle className="ember ember-b" cx="77" cy="68" r="1.1"/><circle className="ember ember-c" cx="53" cy="53" r="1.4"/><circle className="ember ember-d" cx="68" cy="88" r="1.1"/>
-    </svg>
-  </div>;
-}
-
 function Modal({ open, title, close, children, wide = false }) {
   useEffect(() => {
     if (!open) return undefined;
@@ -86,20 +65,6 @@ function Modal({ open, title, close, children, wide = false }) {
 
 function Field({ label, children }) { return <label className="field"><span>{label}</span>{children}</label>; }
 function EmptyState({ icon: Icon = Sparkles, text }) { return <div className="empty-state"><span><Icon size={22}/></span><p>{text}</p></div>; }
-
-function VictoryCelebration({ celebration, s }) {
-  const Icon = VICTORY_ICONS[celebration.variant];
-  return <div key={celebration.id} className={`victory-celebration victory-${celebration.variant}`} role="status" aria-live="polite">
-    <div className="victory-card" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="victory-art" aria-hidden="true">
-        <span className="victory-ring victory-ring-one"/><span className="victory-ring victory-ring-two"/>
-        {Array.from({ length: 12 }, (_, index) => <span className="victory-particle" key={index} style={{ '--particle-angle': `${index * 30}deg`, '--particle-distance': `${47 + (index % 3) * 12}px`, '--particle-delay': `${(index % 4) * 35}ms` }}>{celebration.variant === 'stars' ? '✦' : celebration.variant === 'flame' ? '🔥' : ''}</span>)}
-        <span className="victory-icon"><Icon size={42} strokeWidth={1.8}/></span>
-      </div>
-      <strong>{s.t('انتصرت!')}</strong><span>{s.t('يوم آخر من الانضباط')}</span>
-    </div>
-  </div>;
-}
 
 const SignaturePad = React.forwardRef(function SignaturePad({ value, onChange, t }, ref) {
   const canvasRef = useRef(null);
@@ -238,19 +203,109 @@ function Countdown({ event, large = false }) {
   </div>;
 }
 
-function HomePage({ s, onPlan, onEvent, onWeekly }) {
-  const t = s.t, fd = s.fd, { current, best } = streaks(s.data.disciplineRecords, s.effective);
-  const todayRecord = s.data.disciplineRecords.find((record) => record.date === (markableDay() || s.today));
+function CommitmentCalendar({ commitment, s }) {
+  const [month, setMonth] = useState(() => { const [year, m] = s.today.split('-').map(Number); return new Date(year, m - 1, 1); });
+  const y = month.getFullYear(), m = month.getMonth();
+  const count = new Date(y, m + 1, 0).getDate();
+  const offset = (new Date(y, m, 1).getDay() + (s.lang === 'ar' ? 1 : 6)) % 7;
+  const days = Array.from({ length: count }, (_, i) => `${y}-${pad(m + 1)}-${pad(i + 1)}`);
+  const records = new Map(commitment.records.map((record) => [record.date, record.status]));
+  const labels = s.lang === 'ar' ? ['س','ح','ن','ث','ر','خ','ج'] : ['L','M','M','J','V','S','D'];
+  const monthLabel = new Intl.DateTimeFormat(localeTag(s.lang), { month: 'long', year: 'numeric' }).format(month);
+  return <section className="panel calendar-panel commitment-calendar-panel"><div className="calendar-head"><button className="icon-button" onClick={() => setMonth(new Date(y, m - 1, 1))} aria-label={s.t('الشهر السابق')}>{s.lang === 'ar' ? <ChevronRight/> : <ChevronLeft/>}</button><h2>{monthLabel}</h2><button className="icon-button" onClick={() => setMonth(new Date(y, m + 1, 1))} aria-label={s.t('الشهر التالي')}>{s.lang === 'ar' ? <ChevronLeft/> : <ChevronRight/>}</button></div><div className="calendar-grid">{labels.map((label, i) => <span className="weekday" key={`${label}-${i}`}>{label}</span>)}{Array.from({ length: offset }, (_, i) => <span key={`blank-${i}`}/>)}{days.map((day) => {
+    const required = day >= commitment.startDate && commitment.weekdays.includes(weekdayIndex(day));
+    const status = records.get(day);
+    return <span key={day} title={s.fd(day)} className={`calendar-day ${required ? 'commitment-calendar-required' : 'commitment-calendar-off'} ${status === 'success' ? 'calendar-win' : status === 'failure' ? 'calendar-loss' : ''} ${day === s.today ? 'calendar-today' : ''}`}>{Number(day.slice(-2))}</span>;
+  })}</div><div className="calendar-legend"><span><i className="legend-win"/>{s.t('نجاح')}</span><span><i className="legend-loss"/>{s.t('خسارة')}</span><span><i className="commitment-legend-off"/>{s.t('يوم راحة')}</span></div></section>;
+}
+
+const FLAME_PALETTES = [
+  { start: '#fff18a', middle: '#ff9a27', end: '#ed381b', glow: '#ff8a32' },
+  { start: '#c5fbff', middle: '#4ccaff', end: '#5653ef', glow: '#42c8f3' },
+  { start: '#ffe0ff', middle: '#ef75e7', end: '#8c3be5', glow: '#cc68f1' },
+  { start: '#e4ff9b', middle: '#65dc75', end: '#159b7a', glow: '#55d78d' },
+  { start: '#ffe2ad', middle: '#ff8b75', end: '#dd3677', glow: '#ff6689' },
+  { start: '#fff5b4', middle: '#e9bc4c', end: '#b75c27', glow: '#edbb54' },
+];
+
+function CommitmentFlame({ style = 0, days = 0, label }) {
+  const id = `commitment-flame-${useId().replace(/:/g, '')}`;
+  const flameStyle = Math.max(0, Number.isInteger(style) ? style : 0);
+  const hue = (flameStyle * 137.508 + 25) % 360;
+  const palette = FLAME_PALETTES[flameStyle] || { start: `hsl(${hue} 100% 83%)`, middle: `hsl(${hue} 91% 57%)`, end: `hsl(${(hue + 24) % 360} 82% 35%)`, glow: `hsl(${hue} 94% 57%)` };
+  return <span className={`commitment-flame commitment-flame-style-${flameStyle % 6}`} style={{ '--flame-start': palette.start, '--flame-middle': palette.middle, '--flame-end': palette.end, '--flame-glow': palette.glow }} role="img" aria-label={`${days} ${label}`}>
+    <span className="commitment-flame-aura"/>
+    <svg viewBox="0 0 80 90" aria-hidden="true"><defs><linearGradient id={`${id}-outer`} x1=".2" y1="0" x2=".8" y2="1"><stop stopColor={palette.start}/><stop offset=".43" stopColor={palette.middle}/><stop offset="1" stopColor={palette.end}/></linearGradient><radialGradient id={`${id}-core`} cx="50%" cy="64%" r="53%"><stop stopColor="#fffde9"/><stop offset=".52" stopColor={palette.start}/><stop offset="1" stopColor={palette.middle}/></radialGradient></defs><path className="commitment-flame-shape" d="M42 4C36 17 43 25 48 32c3 4 5 8 5 12 5-5 5-12 2-17 10 11 17 23 15 35-2 15-14 25-30 25S10 76 10 60c0-12 6-21 16-32 0 9 2 14 6 19 0-13 5-19 9-27 3-6 3-11 1-16z" fill={`url(#${id}-outer)`}/><path d="M41 77c-9-3-14-10-13-18 0-6 4-11 9-17 0 8 4 12 8 16 3-6 3-10 2-15 6 8 10 14 9 21-1 7-6 12-15 13z" fill={`url(#${id}-core)`}/><circle className="commitment-flame-spark spark-one" cx="17" cy="46" r="2"/><circle className="commitment-flame-spark spark-two" cx="64" cy="36" r="1.6"/></svg>
+    <b>{days}</b>
+  </span>;
+}
+
+function CommitmentCard({ commitment, s, compact = false }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editMark, setEditMark] = useState(false);
+  const day = markableDay();
+  const record = day ? commitment.records.find((item) => item.date === day) : null;
+  const required = !!day && day >= commitment.startDate && commitment.weekdays.includes(weekdayIndex(day));
+  const canRecord = !!day && required;
+  const stats = commitmentStreak(commitment, s.effective);
+  const recordResult = (status) => {
+    if (record && !editMark && !window.confirm(s.t('تعديل تسجيل اليوم؟'))) return;
+    s.recordCommitmentDay(commitment.id, day, status);
+    setEditMark(false);
+  };
+  return <article className={`panel commitment-card ${compact ? 'commitment-card-compact' : ''}`}>
+    <div className="commitment-card-head"><div className="commitment-card-title"><CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')}/><div><h3>{commitment.title}</h3><small>{s.t('يبدأ الالتزام')} · {s.fd(commitment.startDate, { year: true })}</small></div></div><div className="row-actions"><button className="icon-button" aria-label={s.t(expanded ? 'إخفاء التقويم' : 'عرض التقويم')} onClick={() => setExpanded((value) => !value)}><CalendarDays size={16}/></button>{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button icon-danger" aria-label={s.t('حذف الالتزام')} onClick={() => window.confirm(s.t('حذف هذا الالتزام؟')) && s.deleteCommitment(commitment.id)}><Trash2 size={15}/></button>}</div></div>
+    <div className="commitment-weekdays">{commitment.weekdays.map((index) => <span key={index}>{s.t(WEEKDAYS[index])}</span>)}</div>
+    <div className="commitment-stats"><div><b>{stats.current}</b><small>{s.t('أيام متتالية')}</small></div><div><b>{stats.best}</b><small>{s.t('أفضل سلسلة')}</small></div><div><b>{stats.total}</b><small>{s.t('أيام الالتزام')}</small></div></div>
+    <div className="commitment-record-box">
+      {canRecord && <div className="mark-date">{s.t('اليوم المفتوح للتسجيل:')} <b>{s.fd(day)}</b></div>}
+      {!canRecord && !record ? <p className="mark-hint">{commitment.startDate > s.today ? `${s.t('يبدأ الالتزام في')} ${s.fd(commitment.startDate, { year: true })}` : !day ? s.t('التسجيل مفتوح من 22:00 إلى 08:00 فقط. إن لم تسجّل قبل 08:00 يُحتسب اليوم خسارة.') : s.t('هذا اليوم خارج جدول الالتزام.')}</p>
+        : record && !editMark ? <div className="mark-result"><span className={record.status === 'success' ? 'text-success' : 'text-danger'}><CheckCircle2 size={17}/>{s.t(record.status === 'success' ? 'سجّلت التزام اليوم' : 'سجّلت إخفاق اليوم')}</span>{canRecord && <button className="button subtle compact" onClick={() => setEditMark(true)}><Pencil size={14}/>{s.t('تعديل')}</button>}</div>
+          : <div className="mark-actions"><button className="button primary" onClick={() => recordResult('success')}>🔥 {s.t('التزمت اليوم')}</button><button className="button danger-soft" onClick={() => recordResult('failure')}>{s.t('لم ألتزم اليوم')}</button></div>}
+    </div>
+    {expanded && <CommitmentCalendar commitment={commitment} s={s}/>}
+  </article>;
+}
+
+function CommitmentsHomeSection({ s, onAdd, onView }) {
+  const commitments = [...s.data.commitments].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  return <section className="commitments-home-section"><div className="section-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h2>{s.t('التزاماتي')}</h2><p>{s.t('أنشئ عاداتك، وحدد أيامها، وتابع استمرارك.')}</p></div><button className="button primary compact" onClick={onAdd}><Plus size={15}/>{s.t('التزام جديد')}</button></div>
+    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s} compact/>)}</div> : <div className="panel commitment-empty"><Target size={24}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button subtle" onClick={onView}>{s.t('إدارة الالتزامات')}</button></div>}
+  </section>;
+}
+
+function CommitmentsPage({ s, onAdd }) {
+  const commitments = [...s.data.commitments].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  return <div className="page-stack"><div className="page-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h1>{s.t('التزاماتي')}</h1></div><button className="button primary" onClick={onAdd}><Plus size={17}/>{s.t('التزام جديد')}</button></div><p className="commitment-page-intro">{s.t('أنشئ عاداتك، وحدد أيامها، وتابع استمرارك.')}</p>
+    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s}/>)}</div> : <div className="panel commitment-empty"><Target size={28}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button primary" onClick={onAdd}><Plus size={16}/>{s.t('أنشئ التزاماً')}</button></div>}
+  </div>;
+}
+
+function CommitmentModal({ s, open, close, onCreated }) {
+  const [title, setTitle] = useState('');
+  const [startDate, setStartDate] = useState(s.today);
+  const [weekdays, setWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [error, setError] = useState('');
+  useEffect(() => { if (open) { setTitle(''); setStartDate(s.today); setWeekdays([0, 1, 2, 3, 4, 5, 6]); setError(''); } }, [open, s.today]);
+  const toggleDay = (day) => setWeekdays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day].sort((a, b) => a - b));
+  const submit = (event) => {
+    event.preventDefault();
+    if (!title.trim()) { setError(s.t('أدخل اسم الالتزام.')); return; }
+    if (!validDate(startDate) || startDate < s.today) { setError(s.t('اختر تاريخ بدء صالحاً.')); return; }
+    if (!weekdays.length) { setError(s.t('اختر يوماً واحداً على الأقل.')); return; }
+    if (!s.addCommitment({ title, startDate, weekdays })) { setError(s.t('تعذر إنشاء الالتزام، حاول مرة أخرى.')); return; }
+    close();
+    onCreated?.();
+  };
+  return <Modal open={open} title={s.t('التزام جديد')} close={close}><form className="form-stack" onSubmit={submit}><Field label={s.t('اسم الالتزام')}><input autoFocus required maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder={s.t('مثال: أترك التفاهة أو لا أسهر')}/></Field><Field label={s.t('تاريخ البدء')}><input type="date" min={s.today} value={startDate} onChange={(event) => { setStartDate(event.target.value || s.today); setError(''); }}/></Field><fieldset className="weekday-picker"><legend>{s.t('أيام الالتزام كل أسبوع')}</legend><div>{WEEKDAYS.map((label, index) => <button type="button" key={label} aria-pressed={weekdays.includes(index)} className={weekdays.includes(index) ? 'weekday-choice selected' : 'weekday-choice'} onClick={() => { toggleDay(index); setError(''); }}>{s.t(label)}</button>)}</div></fieldset><p className="helper-text">{s.t('يمكنك تحديد يوم واحد أو عدة أيام، مثل الإثنين إلى الأحد.')}</p>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" type="submit" disabled={!title.trim() || !weekdays.length || !validDate(startDate) || startDate < s.today}><Check size={16}/>{s.t('ابدأ الالتزام')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
+}
+
+function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onViewCommitments }) {
+  const t = s.t, fd = s.fd;
   const mission = s.data.dailyMissions.find((item) => item.scheduledDate === s.effective);
   const upcoming = s.data.dailyMissions.filter((item) => item.scheduledDate > s.effective).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
   const upcomingEvents = s.data.importantEvents.filter((event) => event.status === 'upcoming').sort((a, b) => eventDeadline(a) - eventDeadline(b));
   const nextEvent = upcomingEvents[0];
-  const canMark = !!markableDay();
-  const [editMark, setEditMark] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [celebration, setCelebration] = useState(null);
-  const lastVictoryVariant = useRef(null);
-  const celebrationSequence = useRef(0);
   const [planDate, setPlanDate] = useState(s.nextMissionDate);
   const [extraOpen, setExtraOpen] = useState(false);
   const [extraDate, setExtraDate] = useState('today');
@@ -264,44 +319,9 @@ function HomePage({ s, onPlan, onEvent, onWeekly }) {
     s.addCompletedTask(extraTitle, extraDescription, extraDate === 'yesterday' ? s.yesterday : s.today);
     setExtraTitle(''); setExtraDescription(''); setExtraOpen(false); setExtraDate('today');
   };
-  const validate = (status) => {
-    const day = markableDay();
-    if (!day) return;
-    if (todayRecord && !editMark && !window.confirm(t('تعديل تسجيل اليوم؟'))) return;
-    s.recordDay(day, status);
-    setEditMark(false);
-    setFeedback(status === 'success' ? `+10 ${t('نقطة')} · ${t(WIN_MESSAGES[Math.floor(Math.random() * WIN_MESSAGES.length)])}` : `−10 ${t('نقطة')} · ${t('خسرت اليوم')}`);
-    if (status === 'success') {
-      const wins = s.data.disciplineRecords.filter((record) => record.status === 'success').length;
-      const preferredIndex = wins % VICTORY_VARIANTS.length;
-      const preferred = VICTORY_VARIANTS[preferredIndex];
-      const variant = preferred === lastVictoryVariant.current ? VICTORY_VARIANTS[(preferredIndex + 1) % VICTORY_VARIANTS.length] : preferred;
-      lastVictoryVariant.current = variant;
-      setCelebration({ id: ++celebrationSequence.current, variant });
-    }
-    window.setTimeout(() => setFeedback(''), 3500);
-  };
-  useEffect(() => {
-    if (!celebration) return undefined;
-    const timer = window.setTimeout(() => setCelebration(null), 2600);
-    return () => window.clearTimeout(timer);
-  }, [celebration]);
   return <div className="page-stack">
     {s.weeklyReminder && <section className="panel reminder-panel"><div className="reminder-copy"><span className="eyebrow">FLAME · WEEKLY</span><h2>{t('لا تنسَ تحصيل هذا الأسبوع')}</h2><p>{t('حدد فترة التقرير ومحتواه، ثم احفظه PDF.')}</p></div><button className="button primary" onClick={onWeekly}><Download size={17}/>{t('إعداد التقرير')}</button></section>}
-    <section className="panel streak-panel">
-      <div className="streak-top"><div className="score-chip"><Star size={15} fill="currentColor"/>{s.points} {t('نقطة')}</div><div className="best-chip"><Award size={15}/>{t('الرقم القياسي:')} <b>{best}</b></div></div>
-      <div className="fire-stage"><div className="fire-aura"/><FireMark days={current}/></div>
-      <div className="streak-number">{current}</div><div className="streak-label">{t('أيام من الانضباط')}</div>
-      <div className="streak-motto">{t('شعلتك مستمرة. انضباطك يتحول إلى قوة.')}</div>
-      <div className="discipline-box">
-        {canMark && <div className="mark-date">{t('اليوم المفتوح للتسجيل:')} <b>{s.fd(markableDay())}</b></div>}
-        {!canMark && !todayRecord ? <p className="mark-hint">{t('التسجيل مفتوح من 22:00 إلى 08:00 فقط. إن لم تسجّل قبل 08:00 يُحتسب اليوم خسارة.')}</p>
-          : todayRecord && !editMark ? <div className="mark-result"><span className={todayRecord.status === 'success' ? 'text-success' : 'text-danger'}><CheckCircle2 size={17}/>{t(todayRecord.status === 'success' ? 'سجّلت انتصار اليوم' : 'سجّلت خسارة اليوم')}</span>{canMark && <button className="button subtle compact" onClick={() => setEditMark(true)}><Pencil size={14}/>{t('تعديل')}</button>}</div>
-            : <div className="mark-actions"><button className="button primary" onClick={() => validate('success')}>🔥 {t('انتصرت اليوم')}</button><button className="button danger-soft" onClick={() => validate('failure')}>{t('خسرت اليوم')}</button></div>}
-      </div>
-      {feedback && <div className="feedback-chip">{feedback}</div>}
-    </section>
-    {celebration && <VictoryCelebration celebration={celebration} s={s}/>}
+    <CommitmentsHomeSection s={s} onAdd={onAddCommitment} onView={onViewCommitments}/>
 
     <section className="panel mission-panel">
       <div className="section-heading"><span className="heading-icon"><Target size={19}/></span><div><h2>{t(s.effective === s.today ? 'مهمتي اليوم' : 'مهام الأمس حتى 08:00')}</h2><p>{mission ? `${fd(s.effective)} · ${mission.tasks.filter((task) => task.completed).length} / ${mission.tasks.length} ${t('اكتملت')}` : `${fd(s.effective)} · ${t('لا توجد مهام لهذا اليوم، استعد لمهمتك القادمة.')}`}</p></div><strong className="completion-percent">{mission?.tasks.length ? Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100) : 0}%</strong></div>
@@ -641,7 +661,7 @@ function SettingsPage({ s, fileRef, onReset, onReport }) {
     <WeeklyStats s={s} onReport={onReport}/><ExpenseTrendChart s={s} anchor={s.today}/><section className="panel lifetime-panel"><span className="eyebrow">{s.t('النقاط التراكمية')}</span><b>{s.points}</b><p>+10 {s.t('لكل يوم انتصار')} · +20 {s.t('عند إتمام كل مهام اليوم')} · −10 {s.t('عند الخسارة')}</p></section><div className="stats-four">{[[s.t('الحالية'),s.current],[s.t('الأطول'),s.best],[s.t('أيام النجاح'),s.wins],[s.t('أيام الخسارة'),s.losses]].map(([label, value]) => <div className="panel stat-tile" key={label}><span>{label}</span><b>{value}</b></div>)}</div>
     <div className="settings-heading"><span className="eyebrow">FLAME · SETUP</span><h2>{s.t('الإعدادات')}</h2></div><section className="panel settings-panel"><div className="settings-section-title"><span className="heading-icon"><Settings2 size={18}/></span><div><h2>{s.t('المظهر والتخصيص')}</h2><p>{s.t('سمة الواجهة')}</p></div></div><div className="segmented theme-segment">{[['dark', Moon, 'داكن'],['light', Sun, 'فاتح'],['system', Settings2, 'النظام']].map(([value, Icon, label]) => <button key={value} className={s.data.settings.theme === value ? 'selected' : ''} onClick={() => s.setTheme(value)}><Icon size={15}/>{s.t(label)}</button>)}</div><div className="settings-section-title accent-title"><span className="heading-icon"><Sparkles size={18}/></span><div><h3>{s.t('لون الموقع')}</h3><p>{s.t('البرتقالي هو اللون الافتراضي.')}</p></div></div><div className="accent-grid">{accents.map((accent) => <button className={`accent-option ${s.data.settings.accentColor === accent.id ? 'accent-selected' : ''}`} key={accent.id} onClick={() => s.setAccent(accent.id)}><i style={{ '--swatch': accent.primary, '--swatch-glow': accent.glow }}/><span>{s.t(accent.label)}</span>{s.data.settings.accentColor === accent.id && <Check size={14}/>}</button>)}</div></section>
     <section className="panel settings-panel"><div className="settings-section-title"><span className="heading-icon"><ShieldCheck size={18}/></span><div><h2>{s.t('البيانات والنسخ الاحتياطي')}</h2><p>{s.t('احفظ نسخة من بياناتك أو استعد نسخة سابقة.')}</p></div></div><div className="backup-actions"><button className="button subtle" onClick={exp}><CloudDownload size={16}/>{s.t('تصدير')} JSON</button><button className="button subtle" onClick={() => fileRef.current?.click()}><Upload size={16}/>{s.t('استيراد')} JSON</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(event) => { imp(event.target.files?.[0]); event.target.value = ''; }}/></div><p className="helper-text">{s.t('بياناتك محفوظة في هذا المتصفح وهذا الجهاز فقط، ولا توجد مزامنة بين الهاتف والحاسوب. استخدم التصدير والاستيراد لنقلها.')}</p></section>
-    <section className="panel settings-panel danger-zone"><div className="settings-section-title"><span className="heading-icon danger-icon"><Trash2 size={18}/></span><div><h2>{s.t('إدارة البيانات')}</h2><p>{s.t('سيتم حذف الانضباط والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p></div></div><button className="button danger-outline full-width" onClick={onReset}>{s.t('مسح كل البيانات')}</button></section>
+    <section className="panel settings-panel danger-zone"><div className="settings-section-title"><span className="heading-icon danger-icon"><Trash2 size={18}/></span><div><h2>{s.t('إدارة البيانات')}</h2><p>{s.t('سيتم حذف الانضباط والالتزامات والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p></div></div><button className="button danger-outline full-width" onClick={onReset}>{s.t('مسح كل البيانات')}</button></section>
   </div>;
 }
 
@@ -666,7 +686,12 @@ function EventModal({ s, open, close, editing }) {
 }
 
 export default function App() {
-  const [data, setData] = useState(() => syncData(loadData()));
+  const [data, setData] = useState(() => {
+    const loaded = loadData();
+    const synced = syncData(loaded);
+    if (synced !== loaded) saveData(synced);
+    return synced;
+  });
   const dataRef = useRef(data); dataRef.current = data;
   const [today, setToday] = useState(dateKey());
   const [workDay, setWorkDay] = useState(() => effectiveDay());
@@ -677,6 +702,7 @@ export default function App() {
   const [resetOpen, setResetOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false), [reportDate, setReportDate] = useState(today);
+  const [commitmentOpen, setCommitmentOpen] = useState(false);
   const fileRef = useRef(null);
   const lang = data.settings.lang;
   const t = (text) => tr(text, lang);
@@ -703,6 +729,26 @@ export default function App() {
     }),
     toggleTask: (missionId, taskId) => update((current) => { const activeDate = effectiveDay(); return { ...current, dailyMissions: current.dailyMissions.map((mission) => mission.id === missionId && mission.scheduledDate === activeDate ? { ...mission, tasks: mission.tasks.map((task) => task.id === taskId ? { ...task, completed: !task.completed } : task) } : mission) }; }),
     recordDay: (date, status) => update((current) => ({ ...current, disciplineRecords: [...current.disciplineRecords.filter((record) => record.date !== date), { date, status }].sort((a, b) => a.date.localeCompare(b.date)) })),
+    addCommitment: ({ title, startDate, weekdays }) => {
+      const id = uid();
+      const nextStyle = Math.max(-1, ...dataRef.current.commitments.map((commitment) => commitment.flameStyle ?? -1)) + 1;
+      const next = update((current, currentDate) => {
+        const cleanTitle = title.trim().slice(0, 120);
+        const cleanWeekdays = [...new Set(Array.isArray(weekdays) ? weekdays : [])].filter((day) => Number.isInteger(day) && day >= 0 && day <= 6).sort((a, b) => a - b);
+        if (!cleanTitle || !cleanWeekdays.length || !validDate(startDate) || startDate < currentDate) return current;
+        return { ...current, commitments: [...current.commitments, { id, title: cleanTitle, startDate, weekdays: cleanWeekdays, records: [], flameStyle: nextStyle }] };
+      });
+      return !!next?.commitments.some((commitment) => commitment.id === id);
+    },
+    recordCommitmentDay: (id, date, status) => update((current) => {
+      if (!date || !['success', 'failure'].includes(status)) return current;
+      const record = { date, status };
+      return { ...current, commitments: current.commitments.map((commitment) => {
+        if (commitment.id !== id || !commitment.weekdays.includes(weekdayIndex(date)) || date < commitment.startDate) return commitment;
+        return { ...commitment, records: [...commitment.records.filter((existing) => existing.date !== date), record].sort((a, b) => a.date.localeCompare(b.date)) };
+      }), disciplineRecords: id === LEGACY_COMMITMENT_ID ? [...current.disciplineRecords.filter((item) => item.date !== date), record].sort((a, b) => a.date.localeCompare(b.date)) : current.disciplineRecords };
+    }),
+    deleteCommitment: (id) => id === LEGACY_COMMITMENT_ID ? undefined : update((current) => ({ ...current, commitments: current.commitments.filter((commitment) => commitment.id !== id) })),
     addMission: (date, tasks) => update((current) => {
       if (date <= effectiveDay()) return current;
       const clean = tasks.filter((task) => task.title.trim()).map((task) => ({ id: task.id || uid(), title: task.title.trim(), description: task.description?.trim() || undefined, completed: !!task.completed }));
@@ -742,6 +788,7 @@ export default function App() {
     setToday(currentDate);
     setWorkDay(effectiveDay());
     saveData(next);
+    return next;
   }
 
   useEffect(() => {
@@ -777,18 +824,19 @@ export default function App() {
   const context = { ...s, weeklyReminder, today, tomorrow, nextMissionDate };
   const openPlan = (mission = null, date = nextMissionDate) => { setPlanEdit(mission); setPlanInitialDate(mission?.scheduledDate || date || nextMissionDate); setPlanOpen(true); };
   const openEvent = (event = null) => { setEventEdit(event); setEventOpen(true); };
-  const nav = [[Home,'الرئيسية','home'],[Activity,'السجل','history'],[Receipt,'المصاريف','expenses'],[CalendarDays,'المواعيد','events'],[BarChart3,'الإحصائيات','stats']];
+  const nav = [[Home,'الرئيسية','home'],[Target,'التزاماتي','commitments'],[Activity,'السجل','history'],[Receipt,'المصاريف','expenses'],[CalendarDays,'المواعيد','events'],[BarChart3,'الإحصائيات','stats']];
   return <Ctx.Provider value={context}><div className="app-shell">
     <header className="app-header"><div className="header-brand"><span className="brand-flame"><Flame size={19} fill="currentColor"/></span><span><b>FLAME</b><small>KEEP YOUR FIRE</small></span></div><div className="header-actions"><div className="today-label"><b>{fd(today)}</b><small>{t('احمِ وقتك، واحفظ شعلتك.')}</small></div><button className="language-button" onClick={() => update((current) => ({ ...current, settings: { ...current.settings, lang: current.settings.lang === 'ar' ? 'fr' : 'ar' } }))}><Languages size={15}/>{lang === 'ar' ? 'FR' : 'AR'}</button></div></header>
     {data.settings.userName && <button className="app-identity" dir={lang === 'ar' ? 'rtl' : 'ltr'} onClick={() => setProfileOpen(true)}><span>{t('المستخدم')}</span><b>{data.settings.userName}</b><Pencil size={14}/></button>}
-    <main className="main-content">{tab === 'home' && <HomePage s={context} onPlan={openPlan} onEvent={() => openEvent()} onWeekly={() => openReport()}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</main>
+    <main className="main-content">{tab === 'home' && <HomePage s={context} onPlan={openPlan} onEvent={() => openEvent()} onWeekly={() => openReport()} onAddCommitment={() => setCommitmentOpen(true)} onViewCommitments={() => setTab('commitments')}/ >}{tab === 'commitments' && <CommitmentsPage s={context} onAdd={() => setCommitmentOpen(true)}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</main>
     <SiteFooter s={context}/>
     {(tab === 'home' || tab === 'events') && <button className="floating-add" aria-label={t(tab === 'home' ? 'مهمة جديدة' : 'موعد جديد')} onClick={() => tab === 'home' ? openPlan() : openEvent()}>{tab === 'home' ? <ListChecks size={20}/> : <CalendarPlus size={20}/>}</button>}
     <nav className="bottom-nav" aria-label="Navigation"><div>{nav.map(([Icon, label, id]) => <button key={id} className={tab === id ? 'nav-item nav-active' : 'nav-item'} onClick={() => setTab(id)}><Icon size={20}/><span>{t(label)}</span></button>)}</div></nav>
     <PlanModal s={context} open={planOpen} close={() => setPlanOpen(false)} editing={planEdit} initialDate={planInitialDate}/><EventModal s={context} open={eventOpen} close={() => setEventOpen(false)} editing={eventEdit}/>
     <ReportChooser s={context} open={reportOpen} close={() => setReportOpen(false)} initialDate={reportDate}/>
     <ProfileModal s={context} open={profileOpen} close={() => setProfileOpen(false)}/>
-    <Modal open={resetOpen} title={t('مسح كل البيانات؟')} close={() => setResetOpen(false)}><p className="modal-copy">{t('سيتم حذف الانضباط والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p><div className="form-actions"><button className="button subtle" onClick={() => setResetOpen(false)}>{t('إلغاء')}</button><button className="button danger-solid" onClick={() => { const current = dataRef.current; const cleared = emptyData(); cleared.settings = { ...current.settings, startDate: dateKey() }; dataRef.current = cleared; setData(cleared); saveData(cleared); setResetOpen(false); }}>{t('نعم، امسح')}</button></div></Modal>
+    <CommitmentModal s={context} open={commitmentOpen} close={() => setCommitmentOpen(false)} onCreated={() => setTab('commitments')}/>
+    <Modal open={resetOpen} title={t('مسح كل البيانات؟')} close={() => setResetOpen(false)}><p className="modal-copy">{t('سيتم حذف الانضباط والالتزامات والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p><div className="form-actions"><button className="button subtle" onClick={() => setResetOpen(false)}>{t('إلغاء')}</button><button className="button danger-solid" onClick={() => { const current = dataRef.current; const cleared = emptyData(); cleared.settings = { ...current.settings, startDate: dateKey() }; dataRef.current = cleared; setData(cleared); saveData(cleared); setResetOpen(false); }}>{t('نعم، امسح')}</button></div></Modal>
     {(!data.settings.userName || !data.settings.signature) && <ProfileSetup s={context} onSave={s.setUserProfile}/>}
   </div></Ctx.Provider>;
 }

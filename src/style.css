@@ -216,3 +216,65 @@
 .expense-point-row small{color:var(--muted);font-size:10px}
 .expense-point-row>strong{flex:none;font-size:12px;font-variant-numeric:tabular-nums}
 @media(max-width:390px){.expense-chart-periods button{font-size:9px;padding-inline:2px}.expense-chart-panel{padding:13px}.expense-chart-range{gap:7px}}
+
+.bottom-nav>div{grid-template-columns:repeat(6,minmax(0,1fr))}
+.commitments-home-section{display:grid;gap:10px}
+.commitments-home-section .section-title-row h2{font-size:18px}
+.commitments-home-section .section-title-row p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+.commitment-list{display:grid;gap:10px}
+.commitment-card{display:grid;gap:11px;padding:14px}
+.commitment-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.commitment-card-title{display:flex;align-items:center;gap:9px;min-width:0}
+.commitment-flame{position:relative;width:48px;height:55px;display:grid;place-items:center;flex:none;isolation:isolate;--flame-aura:color-mix(in srgb,var(--flame-glow) 28%,transparent)}
+.commitment-flame-aura{position:absolute;inset:6px 5px 7px;border-radius:50%;background:radial-gradient(ellipse,var(--flame-aura),transparent 72%);filter:blur(2px);transition:transform .25s ease,border-radius .25s ease}
+.commitment-flame svg{position:relative;z-index:1;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--flame-glow) 45%,transparent));animation:flame-breathe 2.4s ease-in-out infinite;transform-origin:50% 90%}
+.commitment-flame-shape{transform-box:fill-box;transform-origin:50% 100%;animation:fire-dance 1.65s ease-in-out infinite}
+.commitment-flame-spark{fill:var(--flame-start);opacity:.8;filter:drop-shadow(0 0 3px var(--flame-glow));animation:ember-rise 1.8s ease-out infinite}
+.commitment-flame .spark-two{animation-delay:-.9s}
+.commitment-flame>b{position:absolute;z-index:2;inset-inline-end:-3px;bottom:-2px;min-width:19px;height:19px;display:grid;place-items:center;padding-inline:3px;border:1px solid color-mix(in srgb,var(--flame-glow) 48%,var(--line));border-radius:999px;background:var(--panel);color:var(--text);font:700 9px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.commitment-flame-style-1 .commitment-flame-aura{inset:7px 4px 10px;border:1px solid color-mix(in srgb,var(--flame-glow) 52%,transparent);border-radius:45% 55% 58% 42%;transform:rotate(38deg)}
+.commitment-flame-style-2 .commitment-flame-aura{inset:9px 7px 11px;border:1px dashed color-mix(in srgb,var(--flame-glow) 68%,transparent);border-radius:46%;transform:rotate(45deg) scale(1.02)}
+.commitment-flame-style-3 .commitment-flame-aura{inset:10px 5px 7px;border-radius:25% 25% 50% 50%;box-shadow:inset 0 0 12px color-mix(in srgb,var(--flame-glow) 28%,transparent)}
+.commitment-flame-style-4 .commitment-flame-aura{inset:8px 5px 9px;border:2px solid color-mix(in srgb,var(--flame-glow) 40%,transparent);border-top-color:transparent;border-radius:50%;transform:rotate(-35deg)}
+.commitment-flame-style-5 .commitment-flame-aura{inset:7px 6px 9px;clip-path:polygon(50% 0,62% 34%,98% 25%,74% 53%,100% 75%,63% 69%,50% 100%,37% 69%,0 75%,26% 53%,2% 25%,38% 34%);background:color-mix(in srgb,var(--flame-glow) 37%,transparent)}
+.commitment-card-title>div{min-width:0;display:grid;gap:2px}
+.commitment-card-title h3{margin:0;overflow-wrap:anywhere;font-size:14px}
+.commitment-card-title small{color:var(--muted);font-size:10px}
+.commitment-card .row-actions{flex:none}
+.commitment-card .row-actions .icon-button{width:32px;height:32px}
+.commitment-weekdays{display:flex;flex-wrap:wrap;gap:5px}
+.commitment-weekdays span{padding:4px 8px;border:1px solid color-mix(in srgb,var(--primary) 19%,var(--line));border-radius:999px;background:color-mix(in srgb,var(--primary) 7%,var(--panel));color:var(--muted);font-size:9px}
+.commitment-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.commitment-stats>div{min-width:0;display:grid;justify-items:center;gap:2px;padding:8px 4px;border:1px solid var(--line);border-radius:13px;background:var(--panel-raised);text-align:center}
+.commitment-stats b{font-size:20px;line-height:1.1;font-variant-numeric:tabular-nums}
+.commitment-stats small{color:var(--muted);font-size:9px}
+.commitment-record-box{min-height:48px;padding:10px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--panel-raised) 82%,transparent);text-align:center}
+.commitment-record-box .mark-date{margin-bottom:8px}
+.commitment-record-box .mark-result{flex-wrap:wrap}
+.commitment-record-box .mark-result>span{font-size:11px}
+.commitment-record-box .mark-hint{font-size:10px}
+.commitment-card-compact{padding:12px}
+.commitment-card-compact .commitment-card-title h3{font-size:13px}
+.commitment-card-compact .commitment-flame{width:41px;height:47px}
+.commitment-card-compact .commitment-stats>div{padding:6px 3px}
+.commitment-card-compact .commitment-stats b{font-size:17px}
+.commitment-card-compact .commitment-stats small{font-size:8px}
+.commitment-card-compact .commitment-weekdays{gap:4px}
+.commitment-card-compact .commitment-weekdays span{padding:3px 6px;font-size:8px}
+.commitment-page-intro{margin:-8px 0 0;color:var(--muted);font-size:12px;line-height:1.6}
+.commitment-empty{display:grid;justify-items:center;gap:10px;padding:22px;text-align:center;color:var(--muted)}
+.commitment-empty>svg{color:var(--primary)}
+.commitment-empty p{max-width:320px;margin:0;font-size:12px;line-height:1.6}
+.commitment-calendar-panel{box-shadow:none;background:var(--panel-raised)}
+.commitment-calendar-off{opacity:.48}
+.commitment-calendar-required:not(.calendar-win):not(.calendar-loss){color:var(--text);border:1px dashed color-mix(in srgb,var(--primary) 45%,var(--line))}
+.commitment-legend-off{border:1px dashed color-mix(in srgb,var(--primary) 45%,var(--line));background:transparent!important}
+.weekday-picker{min-width:0;margin:0;padding:0;border:0}
+.weekday-picker legend{margin-bottom:8px;color:var(--muted);font-size:11px}
+.weekday-picker>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.weekday-choice{min-height:39px;padding:4px 5px;border:1px solid var(--line);border-radius:12px;background:var(--panel-raised);color:var(--muted);font-size:10px;font-weight:700;cursor:pointer}
+.weekday-choice.selected{border-color:color-mix(in srgb,var(--primary) 45%,var(--line));background:color-mix(in srgb,var(--primary) 14%,var(--panel));color:var(--primary)}
+.commitment-calendar-panel{margin-top:2px;padding:11px}
+.legacy-streak-heading{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:1px 2px 8px;text-align:start}
+.legacy-streak-heading>b{padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel-raised);color:var(--muted);font-size:10px}
+@media(max-width:390px){.bottom-nav{padding-inline:4px}.nav-item span{font-size:7.5px}.nav-item svg{width:18px;height:18px}.commitments-home-section .section-title-row{align-items:flex-start}.commitments-home-section .section-title-row .button{padding-inline:8px;font-size:10px}.commitment-card{padding:12px}.weekday-picker>div{grid-template-columns:repeat(3,minmax(0,1fr))}}
