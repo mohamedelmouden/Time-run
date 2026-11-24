@@ -326,17 +326,17 @@
 /* Soft, spring-like motion for section changes and everyday interactions. */
 :root{--motion-spring:cubic-bezier(.22,1,.36,1)}
 html{scroll-behavior:smooth}
-.page-transition{transform-origin:50% 0;animation:ios-section-pop .46s var(--motion-spring) both;backface-visibility:hidden}
-@keyframes ios-section-pop{0%{opacity:0;transform:translate3d(0,18px,0) scale(.95);filter:blur(7px)}68%{opacity:1;transform:translate3d(0,-2px,0) scale(1.008);filter:blur(0)}100%{opacity:1;transform:translate3d(0,0,0) scale(1);filter:blur(0)}}
+.page-transition{transform-origin:50% 0;animation:ios-section-pop .24s var(--motion-spring) both;backface-visibility:hidden}
+@keyframes ios-section-pop{0%{opacity:0;transform:translate3d(0,12px,0) scale(.97);filter:blur(4px)}72%{opacity:1;transform:translate3d(0,-1px,0) scale(1.004);filter:blur(0)}100%{opacity:1;transform:translate3d(0,0,0) scale(1);filter:blur(0)}}
 .button,.icon-button,.language-button,.floating-add,.nav-item,.weekday-choice,.accent-option,.segmented button,.task-toggle,.field input,.field select{transition:transform .28s var(--motion-spring),background-color .24s ease,border-color .24s ease,color .24s ease,box-shadow .28s ease,filter .24s ease}
 .panel,.next-event,.event-card,.expense-row,.archive-card{transition:transform .3s var(--motion-spring),border-color .25s ease,box-shadow .3s ease,background-color .25s ease}
 .field input:focus-visible,.field select:focus-visible{box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 15%,transparent)}
 .bottom-nav{inset:auto auto calc(8px + env(safe-area-inset-bottom)) 50%;width:min(calc(100% - 24px),680px);padding:7px 8px;border:1px solid color-mix(in srgb,var(--line) 85%,var(--primary));border-top:1px solid color-mix(in srgb,var(--line) 85%,var(--primary));border-radius:24px;background:color-mix(in srgb,var(--bg-soft) 90%,transparent);-webkit-backdrop-filter:blur(30px) saturate(1.35);backdrop-filter:blur(30px) saturate(1.35);box-shadow:0 12px 36px rgba(0,0,0,.28);transform:translateX(-50%)}
 .nav-item{position:relative;isolation:isolate;border-radius:17px}
-.nav-item:before{content:"";position:absolute;z-index:-1;inset:0 2px;border:1px solid color-mix(in srgb,var(--primary) 15%,transparent);border-radius:inherit;background:color-mix(in srgb,var(--primary) 10%,transparent);opacity:0;transform:scale(.88);transition:opacity .22s ease,transform .34s var(--motion-spring)}
+.nav-item:before{content:"";position:absolute;z-index:-1;inset:0 2px;border:1px solid color-mix(in srgb,var(--primary) 15%,transparent);border-radius:inherit;background:color-mix(in srgb,var(--primary) 10%,transparent);opacity:0;transform:scale(.88);transition:opacity .16s ease,transform .22s var(--motion-spring)}
 .nav-item.nav-active:before{opacity:1;transform:scale(1)}
 .nav-item svg{transition:transform .34s var(--motion-spring),filter .25s ease}
-.nav-active svg{animation:ios-nav-pop .42s var(--motion-spring) both;filter:drop-shadow(0 0 7px color-mix(in srgb,var(--primary) 50%,transparent))}
+.nav-active svg{animation:ios-nav-pop .24s var(--motion-spring) both;filter:drop-shadow(0 0 7px color-mix(in srgb,var(--primary) 50%,transparent))}
 @keyframes ios-nav-pop{0%{transform:translateY(1px) scale(.76)}68%{transform:translateY(-3px) scale(1.16)}100%{transform:translateY(-1px) scale(1.07)}}
 .modal-scrim{animation:ios-scrim-in .22s ease-out both}
 .modal-card{animation:ios-modal-in .34s var(--motion-spring) both}
