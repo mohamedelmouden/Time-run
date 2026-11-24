@@ -228,12 +228,12 @@ const FLAME_PALETTES = [
   { start: '#fff5b4', middle: '#e9bc4c', end: '#b75c27', glow: '#edbb54' },
 ];
 
-function CommitmentFlame({ style = 0, days = 0, label }) {
+function CommitmentFlame({ style = 0, days = 0, label, countBelow = false }) {
   const id = `commitment-flame-${useId().replace(/:/g, '')}`;
   const flameStyle = Math.max(0, Number.isInteger(style) ? style : 0);
   const hue = (flameStyle * 137.508 + 25) % 360;
   const palette = FLAME_PALETTES[flameStyle] || { start: `hsl(${hue} 100% 83%)`, middle: `hsl(${hue} 91% 57%)`, end: `hsl(${(hue + 24) % 360} 82% 35%)`, glow: `hsl(${hue} 94% 57%)` };
-  return <span className={`commitment-flame commitment-flame-style-${flameStyle % 6}`} style={{ '--flame-start': palette.start, '--flame-middle': palette.middle, '--flame-end': palette.end, '--flame-glow': palette.glow }} role="img" aria-label={`${days} ${label}`}>
+  return <span className={`commitment-flame commitment-flame-style-${flameStyle % 6}${countBelow ? ' commitment-flame-count-below' : ''}`} style={{ '--flame-start': palette.start, '--flame-middle': palette.middle, '--flame-end': palette.end, '--flame-glow': palette.glow }} role="img" aria-label={`${days} ${label}`}>
     <span className="commitment-flame-aura"/>
     <svg viewBox="0 0 80 90" aria-hidden="true"><defs><linearGradient id={`${id}-outer`} x1=".2" y1="0" x2=".8" y2="1"><stop stopColor={palette.start}/><stop offset=".43" stopColor={palette.middle}/><stop offset="1" stopColor={palette.end}/></linearGradient><radialGradient id={`${id}-core`} cx="50%" cy="64%" r="53%"><stop stopColor="#fffde9"/><stop offset=".52" stopColor={palette.start}/><stop offset="1" stopColor={palette.middle}/></radialGradient></defs><path className="commitment-flame-shape" d="M42 4C36 17 43 25 48 32c3 4 5 8 5 12 5-5 5-12 2-17 10 11 17 23 15 35-2 15-14 25-30 25S10 76 10 60c0-12 6-21 16-32 0 9 2 14 6 19 0-13 5-19 9-27 3-6 3-11 1-16z" fill={`url(#${id}-outer)`}/><path d="M41 77c-9-3-14-10-13-18 0-6 4-11 9-17 0 8 4 12 8 16 3-6 3-10 2-15 6 8 10 14 9 21-1 7-6 12-15 13z" fill={`url(#${id}-core)`}/><circle className="commitment-flame-spark spark-one" cx="17" cy="46" r="2"/><circle className="commitment-flame-spark spark-two" cx="64" cy="36" r="1.6"/></svg>
     <b>{days}</b>
@@ -332,10 +332,18 @@ function CommitmentCard({ commitment, s, compact = false, onEdit }) {
   </article>;
 }
 
-function CommitmentsHomeSection({ s, onAdd, onView, onEdit }) {
+function HomeCommitmentItem({ commitment, s }) {
+  const stats = commitmentStreak(commitment, s.effective);
+  return <article className="home-commitment-item" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
+    <CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')} countBelow/>
+    <h3>{commitment.title}</h3>
+  </article>;
+}
+
+function CommitmentsHomeSection({ s, onAdd, onView }) {
   const commitments = [...s.data.commitments].sort((a, b) => a.startDate.localeCompare(b.startDate));
-  return <section className="commitments-home-section"><div className="section-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h2>{s.t('التزاماتي')}</h2><p>{s.t('أنشئ عاداتك، وحدد أيامها، وتابع استمرارك.')}</p></div><button className="button primary compact" onClick={onAdd}><Plus size={15}/>{s.t('التزام جديد')}</button></div>
-    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s} onEdit={onEdit} compact/>)}</div> : <div className="panel commitment-empty"><Target size={24}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button subtle" onClick={onView}>{s.t('إدارة الالتزامات')}</button></div>}
+  return <section className="commitments-home-section"><div className="section-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h2>{s.t('التزاماتي')}</h2></div><button className="button primary compact" onClick={onAdd}><Plus size={15}/>{s.t('التزام جديد')}</button></div>
+    {commitments.length ? <div className="home-commitment-row">{commitments.map((commitment) => <HomeCommitmentItem key={commitment.id} commitment={commitment} s={s}/>)}</div> : <div className="panel commitment-empty"><Target size={24}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button subtle" onClick={onView}>{s.t('إدارة الالتزامات')}</button></div>}
   </section>;
 }
 
@@ -380,7 +388,7 @@ function CommitmentModal({ s, open, close, onCreated, editing }) {
   return <Modal open={open} title={s.t(editing ? 'تعديل الالتزام' : 'التزام جديد')} close={close}><form className="form-stack" onSubmit={submit}><Field label={s.t('اسم الالتزام')}><input autoFocus required maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder={s.t('مثال: أترك التفاهة أو لا أسهر')}/></Field><Field label={s.t('تاريخ البدء')}><input type="date" min={editing?.startDate || s.today} value={startDate} onChange={(event) => { setStartDate(event.target.value || s.today); setError(''); }}/></Field><div className="commitment-form-grid"><Field label={s.t('من وقت')}><input type="time" required value={windowStartTime} onChange={(event) => { setWindowStartTime(event.target.value); setError(''); }}/></Field><Field label={s.t('إلى وقت')}><input type="time" required value={windowEndTime} onChange={(event) => { setWindowEndTime(event.target.value); setError(''); }}/></Field></div><div className="commitment-evaluation-field"><Field label={s.t('وقت تقييم النتيجة')}><input type="time" required value={checkInTime} onChange={(event) => { setCheckInTime(event.target.value); setError(''); }}/></Field></div>{windowStartTime && windowEndTime && !validCommitmentWindow(windowStartTime, windowEndTime) && <p className="profile-form-error" role="alert">{s.t('يجب أن يكون وقت النهاية بعد وقت البداية في اليوم نفسه.')}</p>}{validCommitmentWindow(windowStartTime, windowEndTime) && checkInTime && checkInTime < windowEndTime && <p className="profile-form-error" role="alert">{s.t('يجب أن يكون وقت التقييم عند نهاية النافذة أو بعدها.')}</p>}<p className="helper-text">{s.t('حدد بداية ونهاية نافذة الالتزام لكل يوم مختار، ثم اختر وقت تقييم النتيجة. يفتح التسجيل عند هذا الموعد ويبقى متاحاً حتى بداية النافذة التالية.')}</p><fieldset className="weekday-picker"><legend>{s.t('أيام الالتزام كل أسبوع')}</legend><div>{WEEKDAYS.map((label, index) => <button type="button" key={label} aria-pressed={weekdays.includes(index)} className={weekdays.includes(index) ? 'weekday-choice selected' : 'weekday-choice'} onClick={() => { toggleDay(index); setError(''); }}>{s.t(label)}</button>)}</div></fieldset><p className="helper-text">{s.t('يمكنك تحديد يوم واحد أو عدة أيام، مثل الإثنين إلى الأحد.')}</p>{editing && <p className="helper-text commitment-edit-note">{s.t('تسري تغييرات الأيام والوقت من اليوم، وتبقى السجلات السابقة محفوظة.')}</p>}<label className="commitment-notify-choice"><input type="checkbox" checked={reminders} onChange={(event) => setReminders(event.target.checked)}/><span><b>{s.t('ذكّرني بموعد التقييم')}</b><small>{s.t('يلزم السماح بإشعارات المتصفح وترك الموقع مفتوحاً وقت التذكير.')}</small></span></label>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" type="submit" disabled={!title.trim() || !weekdays.length || !validDate(startDate) || (!editing && startDate < s.today) || !validCommitmentSchedule(windowStartTime, windowEndTime, checkInTime)}><Check size={16}/>{s.t(editing ? 'حفظ التعديلات' : 'ابدأ الالتزام')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
 }
 
-function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onEditCommitment, onViewCommitments }) {
+function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onViewCommitments }) {
   const t = s.t, fd = s.fd;
   const mission = s.data.dailyMissions.find((item) => item.scheduledDate === s.effective);
   const upcoming = s.data.dailyMissions.filter((item) => item.scheduledDate > s.effective).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
@@ -401,7 +409,7 @@ function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onEditCommitm
   };
   return <div className="page-stack">
     {s.weeklyReminder && <section className="panel reminder-panel"><div className="reminder-copy"><span className="eyebrow">FLAME · WEEKLY</span><h2>{t('لا تنسَ تحصيل هذا الأسبوع')}</h2><p>{t('حدد فترة التقرير ومحتواه، ثم احفظه PDF.')}</p></div><button className="button primary" onClick={onWeekly}><Download size={17}/>{t('إعداد التقرير')}</button></section>}
-    <CommitmentsHomeSection s={s} onAdd={onAddCommitment} onView={onViewCommitments} onEdit={onEditCommitment}/>
+    <CommitmentsHomeSection s={s} onAdd={onAddCommitment} onView={onViewCommitments}/>
 
     <section className="panel mission-panel">
       <div className="section-heading"><span className="heading-icon"><Target size={19}/></span><div><h2>{t(s.effective === s.today ? 'مهمتي اليوم' : 'مهام الأمس حتى 08:00')}</h2><p>{mission ? `${fd(s.effective)} · ${mission.tasks.filter((task) => task.completed).length} / ${mission.tasks.length} ${t('اكتملت')}` : `${fd(s.effective)} · ${t('لا توجد مهام لهذا اليوم، استعد لمهمتك القادمة.')}`}</p></div><strong className="completion-percent">{mission?.tasks.length ? Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100) : 0}%</strong></div>
