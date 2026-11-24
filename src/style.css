@@ -322,3 +322,35 @@
 @keyframes commitment-bar-glow{0%,100%{filter:saturate(.96);box-shadow:none}50%{filter:saturate(1.2);box-shadow:0 0 9px color-mix(in srgb,var(--glow) 32%,transparent)}}
 @media(max-width:390px){.commitment-form-grid{grid-template-columns:1fr 1fr;gap:7px}.commitment-progress-block>div:first-child>span,.commitment-progress-block>div:first-child>b{font-size:9px}.commitment-card .row-actions{gap:3px}.commitment-card .row-actions .icon-button{width:29px;height:29px}}
 @media(prefers-reduced-motion:reduce){.commitment-card,.commitment-progress-track>span,.daily-window-progress .commitment-progress-track>span{animation:none!important;transition:none!important}}
+
+/* Soft, spring-like motion for section changes and everyday interactions. */
+:root{--motion-spring:cubic-bezier(.22,1,.36,1);--motion-soft:cubic-bezier(.2,.75,.25,1)}
+html{scroll-behavior:smooth}
+.page-transition{transform-origin:50% 0;animation:ios-section-enter .38s var(--motion-spring) both;backface-visibility:hidden}
+@keyframes ios-section-enter{0%{opacity:0;transform:translate3d(0,10px,0) scale(.992);filter:blur(2px)}55%{opacity:1}100%{opacity:1;transform:translate3d(0,0,0) scale(1);filter:blur(0)}}
+.button,.icon-button,.language-button,.floating-add,.nav-item,.weekday-choice,.accent-option,.segmented button,.task-toggle,.field input,.field select{transition:transform .28s var(--motion-spring),background-color .24s ease,border-color .24s ease,color .24s ease,box-shadow .28s ease,filter .24s ease}
+.panel,.next-event,.event-card,.expense-row,.archive-card{transition:transform .3s var(--motion-spring),border-color .25s ease,box-shadow .3s ease,background-color .25s ease}
+.field input:focus-visible,.field select:focus-visible{box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 15%,transparent)}
+.bottom-nav{inset:auto auto calc(8px + env(safe-area-inset-bottom)) 50%;width:min(calc(100% - 24px),680px);padding:7px 8px;border:1px solid color-mix(in srgb,var(--line) 85%,var(--primary));border-top:1px solid color-mix(in srgb,var(--line) 85%,var(--primary));border-radius:24px;background:color-mix(in srgb,var(--bg-soft) 82%,transparent);box-shadow:0 12px 36px rgba(0,0,0,.28);transform:translateX(-50%)}
+.nav-item{position:relative;isolation:isolate;border-radius:17px}
+.nav-item:before{content:"";position:absolute;z-index:-1;inset:0 2px;border:1px solid color-mix(in srgb,var(--primary) 15%,transparent);border-radius:inherit;background:color-mix(in srgb,var(--primary) 10%,transparent);opacity:0;transform:scale(.88);transition:opacity .22s ease,transform .34s var(--motion-spring)}
+.nav-item.nav-active:before{opacity:1;transform:scale(1)}
+.nav-item svg{transition:transform .34s var(--motion-spring),filter .25s ease}
+.nav-active svg{transform:translateY(-1px) scale(1.07)}
+.modal-scrim{animation:ios-scrim-in .22s ease-out both}
+.modal-card{animation:ios-modal-in .34s var(--motion-spring) both}
+@keyframes ios-scrim-in{from{opacity:0}to{opacity:1}}
+@keyframes ios-modal-in{0%{opacity:.72;transform:translateY(20px) scale(.985)}70%{opacity:1}100%{opacity:1;transform:translateY(0) scale(1)}}
+@media(hover:hover) and (pointer:fine){
+  .button:not(:disabled):hover{transform:translateY(-2px);filter:brightness(1.04)}
+  .icon-button:not(:disabled):hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--primary) 34%,var(--line));color:var(--text)}
+  .panel:hover,.next-event:hover,.event-card:hover,.archive-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--primary) 22%,var(--line));box-shadow:0 20px 44px rgba(0,0,0,.22)}
+  .task-toggle:hover{transform:translateY(-1px);border-color:var(--line);background:color-mix(in srgb,var(--primary) 5%,var(--panel-raised))}
+  .nav-item:not(.nav-active):hover{color:var(--text)}
+}
+.button:active,.icon-button:active,.floating-add:active,.nav-item:active,.task-toggle:active{transform:scale(.96)}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto!important}
+  .page-transition,.modal-scrim,.modal-card{animation:none!important;filter:none!important}
+  .panel,.next-event,.event-card,.expense-row,.archive-card,.button,.icon-button,.language-button,.floating-add,.nav-item,.weekday-choice,.accent-option,.segmented button,.task-toggle,.field input,.field select{transition:none!important;transform:none!important}
+}
