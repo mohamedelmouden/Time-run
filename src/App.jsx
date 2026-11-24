@@ -7,7 +7,7 @@ import {
   ShieldCheck, Sparkles, Sun, Target, Trash2, Upload, X,
 } from 'lucide-react';
 import {
-  accents, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableDay, normalizeData,
+  accents, commitmentEndDate, commitmentIncludesDate, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableCommitmentDay, markableDay, normalizeData,
   pad, points, PURCHASE_PERIODS, purchasePeriodLabels, saveData, shiftDate, streaks, syncData, uid, validDate, weekdayIndex,
 } from './data.js';
 import { localeTag, tr } from './i18n.js';
@@ -213,7 +213,7 @@ function CommitmentCalendar({ commitment, s }) {
   const labels = s.lang === 'ar' ? ['س','ح','ن','ث','ر','خ','ج'] : ['L','M','M','J','V','S','D'];
   const monthLabel = new Intl.DateTimeFormat(localeTag(s.lang), { month: 'long', year: 'numeric' }).format(month);
   return <section className="panel calendar-panel commitment-calendar-panel"><div className="calendar-head"><button className="icon-button" onClick={() => setMonth(new Date(y, m - 1, 1))} aria-label={s.t('الشهر السابق')}>{s.lang === 'ar' ? <ChevronRight/> : <ChevronLeft/>}</button><h2>{monthLabel}</h2><button className="icon-button" onClick={() => setMonth(new Date(y, m + 1, 1))} aria-label={s.t('الشهر التالي')}>{s.lang === 'ar' ? <ChevronLeft/> : <ChevronRight/>}</button></div><div className="calendar-grid">{labels.map((label, i) => <span className="weekday" key={`${label}-${i}`}>{label}</span>)}{Array.from({ length: offset }, (_, i) => <span key={`blank-${i}`}/>)}{days.map((day) => {
-    const required = day >= commitment.startDate && commitment.weekdays.includes(weekdayIndex(day));
+    const required = commitmentIncludesDate(commitment, day) && commitment.weekdays.includes(weekdayIndex(day));
     const status = records.get(day);
     return <span key={day} title={s.fd(day)} className={`calendar-day ${required ? 'commitment-calendar-required' : 'commitment-calendar-off'} ${status === 'success' ? 'calendar-win' : status === 'failure' ? 'calendar-loss' : ''} ${day === s.today ? 'calendar-today' : ''}`}>{Number(day.slice(-2))}</span>;
   })}</div><div className="calendar-legend"><span><i className="legend-win"/>{s.t('نجاح')}</span><span><i className="legend-loss"/>{s.t('خسارة')}</span><span><i className="commitment-legend-off"/>{s.t('يوم راحة')}</span></div></section>;
@@ -240,67 +240,121 @@ function CommitmentFlame({ style = 0, days = 0, label }) {
   </span>;
 }
 
-function CommitmentCard({ commitment, s, compact = false }) {
+function CommitmentCard({ commitment, s, compact = false, onEdit }) {
   const [expanded, setExpanded] = useState(false);
   const [editMark, setEditMark] = useState(false);
-  const day = markableDay();
+  const [clockNow, setClockNow] = useState(Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setClockNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
+  const now = new Date(clockNow);
+  const day = commitment.id === LEGACY_COMMITMENT_ID ? markableDay(now) : markableCommitmentDay(commitment, now);
   const record = day ? commitment.records.find((item) => item.date === day) : null;
-  const required = !!day && day >= commitment.startDate && commitment.weekdays.includes(weekdayIndex(day));
+  const required = !!day && commitment.weekdays.includes(weekdayIndex(day)) && commitmentIncludesDate(commitment, day);
   const canRecord = !!day && required;
   const stats = commitmentStreak(commitment, s.effective);
+  const checkInTime = commitment.checkInTime || '22:00';
+  const clockTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  let periodStart, periodEnd;
+  if (commitment.id === LEGACY_COMMITMENT_ID) {
+    const hour = now.getHours(), todayKey = dateKey(now), yesterdayKey = shiftDate(todayKey, -1), tomorrowKey = shiftDate(todayKey, 1);
+    if (hour < 8) { periodStart = new Date(`${yesterdayKey}T22:00:00`); periodEnd = new Date(`${todayKey}T08:00:00`); }
+    else if (hour < 22) { periodStart = new Date(`${todayKey}T08:00:00`); periodEnd = new Date(`${todayKey}T22:00:00`); }
+    else { periodStart = new Date(`${todayKey}T22:00:00`); periodEnd = new Date(`${tomorrowKey}T08:00:00`); }
+  } else {
+    const periodDate = clockTime >= checkInTime ? dateKey(now) : shiftDate(dateKey(now), -1);
+    periodStart = new Date(`${periodDate}T${checkInTime}:00`);
+    periodEnd = new Date(`${shiftDate(periodDate, 1)}T${checkInTime}:00`);
+  }
+  const dayRemaining = Math.max(0, periodEnd.getTime() - clockNow);
+  const dayRemainingRatio = Math.max(0, Math.min(1, dayRemaining / (periodEnd.getTime() - periodStart.getTime())));
+  const dayHours = Math.floor(dayRemaining / 3600000), dayMinutes = Math.floor((dayRemaining % 3600000) / 60000);
+  const periodEndLabel = `${String(periodEnd.getHours()).padStart(2, '0')}:${String(periodEnd.getMinutes()).padStart(2, '0')}`;
+  const timeProgressLabel = commitment.id === LEGACY_COMMITMENT_ID ? 'الوقت المتبقي لموعد التقييم' : 'الوقت المتبقي في اليوم';
+  const endDate = commitmentEndDate(commitment);
+  const challengeStart = new Date(`${commitment.startDate}T00:00:00`);
+  const challengeEnd = endDate ? new Date(`${shiftDate(endDate, 1)}T00:00:00`) : null;
+  const challengeRatio = challengeEnd ? Math.max(0, Math.min(1, (challengeEnd.getTime() - clockNow) / (challengeEnd.getTime() - challengeStart.getTime()))) : null;
+  const challengeDaysLeft = challengeEnd ? Math.max(0, Math.ceil((challengeEnd.getTime() - clockNow) / 86400000)) : null;
+  const numeral = (value) => new Intl.NumberFormat(localeTag(s.lang)).format(value);
   const recordResult = (status) => {
     if (record && !editMark && !window.confirm(s.t('تعديل تسجيل اليوم؟'))) return;
     s.recordCommitmentDay(commitment.id, day, status);
     setEditMark(false);
   };
+  const enableReminder = async () => {
+    if (!('Notification' in window)) { window.alert(s.t('الإشعارات غير مدعومة في هذا المتصفح.')); return; }
+    try {
+      const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+      if (permission === 'granted') s.setCommitmentReminder(commitment.id, true);
+      else window.alert(s.t('اسمح بالإشعارات من إعدادات المتصفح لتفعيل التذكير.'));
+    } catch { window.alert(s.t('اسمح بالإشعارات من إعدادات المتصفح لتفعيل التذكير.')); }
+  };
   return <article className={`panel commitment-card ${compact ? 'commitment-card-compact' : ''}`}>
-    <div className="commitment-card-head"><div className="commitment-card-title"><CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')}/><div><h3>{commitment.title}</h3><small>{s.t('يبدأ الالتزام')} · {s.fd(commitment.startDate, { year: true })}</small></div></div><div className="row-actions"><button className="icon-button" aria-label={s.t(expanded ? 'إخفاء التقويم' : 'عرض التقويم')} onClick={() => setExpanded((value) => !value)}><CalendarDays size={16}/></button>{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button icon-danger" aria-label={s.t('حذف الالتزام')} onClick={() => window.confirm(s.t('حذف هذا الالتزام؟')) && s.deleteCommitment(commitment.id)}><Trash2 size={15}/></button>}</div></div>
+    <div className="commitment-card-head"><div className="commitment-card-title"><CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')}/><div><h3>{commitment.title}</h3><small>{s.t('يبدأ الالتزام')} · {s.fd(commitment.startDate, { year: true })}</small></div></div><div className="row-actions">{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button" aria-label={s.t('تعديل الالتزام')} onClick={() => onEdit?.(commitment)}><Pencil size={15}/></button>}<button className="icon-button" aria-label={s.t(expanded ? 'إخفاء التقويم' : 'عرض التقويم')} onClick={() => setExpanded((value) => !value)}><CalendarDays size={16}/></button>{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button icon-danger" aria-label={s.t('حذف الالتزام')} onClick={() => window.confirm(s.t('حذف هذا الالتزام؟')) && s.deleteCommitment(commitment.id)}><Trash2 size={15}/></button>}</div></div>
     <div className="commitment-weekdays">{commitment.weekdays.map((index) => <span key={index}>{s.t(WEEKDAYS[index])}</span>)}</div>
+    <div className="commitment-progress-stack">
+      <div className="commitment-progress-block daily-window-progress"><div><span>{s.t(timeProgressLabel)}</span><b>{s.t('حتى')} {periodEndLabel} · {numeral(dayHours)} {s.t('ساعات')} {numeral(dayMinutes)} {s.t('دقائق')}</b></div><div className="commitment-progress-track" role="progressbar" aria-label={s.t(timeProgressLabel)} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(dayRemainingRatio * 100)}><span style={{ width: `${dayRemainingRatio * 100}%` }}/></div></div>
+      {challengeRatio !== null && <div className="commitment-progress-block challenge-progress"><div><span>{s.t('تقدم التحدي')}</span><b>{challengeDaysLeft === 0 ? s.t('انتهى التحدي') : `${numeral(challengeDaysLeft)} ${s.t(challengeDaysLeft === 1 ? 'يوم متبقٍ' : 'أيام متبقية')}`}</b></div><div className="commitment-progress-track" role="progressbar" aria-label={s.t('تقدم التحدي')} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round((1 - challengeRatio) * 100)}><span style={{ width: `${(1 - challengeRatio) * 100}%` }}/></div></div>}
+    </div>
     <div className="commitment-stats"><div><b>{stats.current}</b><small>{s.t('أيام متتالية')}</small></div><div><b>{stats.best}</b><small>{s.t('أفضل سلسلة')}</small></div><div><b>{stats.total}</b><small>{s.t('أيام الالتزام')}</small></div></div>
     <div className="commitment-record-box">
       {canRecord && <div className="mark-date">{s.t('اليوم المفتوح للتسجيل:')} <b>{s.fd(day)}</b></div>}
-      {!canRecord && !record ? <p className="mark-hint">{commitment.startDate > s.today ? `${s.t('يبدأ الالتزام في')} ${s.fd(commitment.startDate, { year: true })}` : !day ? s.t('التسجيل مفتوح من 22:00 إلى 08:00 فقط. إن لم تسجّل قبل 08:00 يُحتسب اليوم خسارة.') : s.t('هذا اليوم خارج جدول الالتزام.')}</p>
+      {!canRecord && !record ? <p className="mark-hint">{commitment.startDate > s.today ? `${s.t('يبدأ الالتزام في')} ${s.fd(commitment.startDate, { year: true })}` : endDate && endDate < s.today ? s.t('انتهى التحدي') : !day ? commitment.id === LEGACY_COMMITMENT_ID ? s.t('التسجيل مفتوح من 22:00 إلى 08:00 فقط. إن لم تسجّل قبل 08:00 يُحتسب اليوم خسارة.') : `${s.t('يظهر التسجيل في أيام الالتزام المحددة')} · ${checkInTime}` : s.t('هذا اليوم خارج جدول الالتزام.')}</p>
         : record && !editMark ? <div className="mark-result"><span className={record.status === 'success' ? 'text-success' : 'text-danger'}><CheckCircle2 size={17}/>{s.t(record.status === 'success' ? 'سجّلت التزام اليوم' : 'سجّلت إخفاق اليوم')}</span>{canRecord && <button className="button subtle compact" onClick={() => setEditMark(true)}><Pencil size={14}/>{s.t('تعديل')}</button>}</div>
           : <div className="mark-actions"><button className="button primary" onClick={() => recordResult('success')}>🔥 {s.t('التزمت اليوم')}</button><button className="button danger-soft" onClick={() => recordResult('failure')}>{s.t('لم ألتزم اليوم')}</button></div>}
     </div>
+    {commitment.id !== LEGACY_COMMITMENT_ID && (commitment.reminders ? <div className="commitment-reminder-status"><AlarmClock size={13}/>{s.t('التذكير مفعل')}</div> : <button className="commitment-reminder-link" onClick={enableReminder}><AlarmClock size={14}/>{s.t('تفعيل إشعار التقييم')}</button>)}
     {expanded && <CommitmentCalendar commitment={commitment} s={s}/>}
   </article>;
 }
 
-function CommitmentsHomeSection({ s, onAdd, onView }) {
+function CommitmentsHomeSection({ s, onAdd, onView, onEdit }) {
   const commitments = [...s.data.commitments].sort((a, b) => a.startDate.localeCompare(b.startDate));
   return <section className="commitments-home-section"><div className="section-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h2>{s.t('التزاماتي')}</h2><p>{s.t('أنشئ عاداتك، وحدد أيامها، وتابع استمرارك.')}</p></div><button className="button primary compact" onClick={onAdd}><Plus size={15}/>{s.t('التزام جديد')}</button></div>
-    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s} compact/>)}</div> : <div className="panel commitment-empty"><Target size={24}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button subtle" onClick={onView}>{s.t('إدارة الالتزامات')}</button></div>}
+    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s} onEdit={onEdit} compact/>)}</div> : <div className="panel commitment-empty"><Target size={24}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button subtle" onClick={onView}>{s.t('إدارة الالتزامات')}</button></div>}
   </section>;
 }
 
-function CommitmentsPage({ s, onAdd }) {
+function CommitmentsPage({ s, onAdd, onEdit }) {
   const commitments = [...s.data.commitments].sort((a, b) => a.startDate.localeCompare(b.startDate));
   return <div className="page-stack"><div className="page-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h1>{s.t('التزاماتي')}</h1></div><button className="button primary" onClick={onAdd}><Plus size={17}/>{s.t('التزام جديد')}</button></div><p className="commitment-page-intro">{s.t('أنشئ عاداتك، وحدد أيامها، وتابع استمرارك.')}</p>
-    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s}/>)}</div> : <div className="panel commitment-empty"><Target size={28}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button primary" onClick={onAdd}><Plus size={16}/>{s.t('أنشئ التزاماً')}</button></div>}
+    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s} onEdit={onEdit}/>)}</div> : <div className="panel commitment-empty"><Target size={28}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button primary" onClick={onAdd}><Plus size={16}/>{s.t('أنشئ التزاماً')}</button></div>}
   </div>;
 }
 
-function CommitmentModal({ s, open, close, onCreated }) {
+function CommitmentModal({ s, open, close, onCreated, editing }) {
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState(s.today);
   const [weekdays, setWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [durationDays, setDurationDays] = useState('30');
+  const [checkInTime, setCheckInTime] = useState('22:00');
+  const [reminders, setReminders] = useState(true);
   const [error, setError] = useState('');
-  useEffect(() => { if (open) { setTitle(''); setStartDate(s.today); setWeekdays([0, 1, 2, 3, 4, 5, 6]); setError(''); } }, [open, s.today]);
+  useEffect(() => { if (open) { setTitle(editing?.title || ''); setStartDate(editing?.startDate || s.today); setWeekdays(editing?.weekdays || [0, 1, 2, 3, 4, 5, 6]); setDurationDays(editing ? (editing.durationDays ? String(editing.durationDays) : '') : '30'); setCheckInTime(editing?.checkInTime || '22:00'); setReminders(editing ? !!editing.reminders : true); setError(''); } }, [open, s.today, editing]);
   const toggleDay = (day) => setWeekdays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day].sort((a, b) => a - b));
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     if (!title.trim()) { setError(s.t('أدخل اسم الالتزام.')); return; }
-    if (!validDate(startDate) || startDate < s.today) { setError(s.t('اختر تاريخ بدء صالحاً.')); return; }
+    if (!validDate(startDate) || (!editing && startDate < s.today)) { setError(s.t('اختر تاريخ بدء صالحاً.')); return; }
     if (!weekdays.length) { setError(s.t('اختر يوماً واحداً على الأقل.')); return; }
-    if (!s.addCommitment({ title, startDate, weekdays })) { setError(s.t('تعذر إنشاء الالتزام، حاول مرة أخرى.')); return; }
+    const duration = Number(durationDays);
+    if (!Number.isInteger(duration) || duration < 1 || duration > 3650) { setError(s.t('حدد مدة بين يوم واحد وعشر سنوات.')); return; }
+    let enableNotifications = false;
+    if (reminders && 'Notification' in window) {
+      try {
+        const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+        enableNotifications = permission === 'granted';
+      } catch { enableNotifications = false; }
+    }
+    const payload = { title, startDate, weekdays, durationDays: duration, checkInTime, reminders: enableNotifications };
+    const saved = editing ? s.updateCommitment(editing.id, payload) : s.addCommitment(payload);
+    if (!saved) { setError(s.t(editing ? 'تعذر تعديل الالتزام، حاول مرة أخرى.' : 'تعذر إنشاء الالتزام، حاول مرة أخرى.')); return; }
     close();
     onCreated?.();
   };
-  return <Modal open={open} title={s.t('التزام جديد')} close={close}><form className="form-stack" onSubmit={submit}><Field label={s.t('اسم الالتزام')}><input autoFocus required maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder={s.t('مثال: أترك التفاهة أو لا أسهر')}/></Field><Field label={s.t('تاريخ البدء')}><input type="date" min={s.today} value={startDate} onChange={(event) => { setStartDate(event.target.value || s.today); setError(''); }}/></Field><fieldset className="weekday-picker"><legend>{s.t('أيام الالتزام كل أسبوع')}</legend><div>{WEEKDAYS.map((label, index) => <button type="button" key={label} aria-pressed={weekdays.includes(index)} className={weekdays.includes(index) ? 'weekday-choice selected' : 'weekday-choice'} onClick={() => { toggleDay(index); setError(''); }}>{s.t(label)}</button>)}</div></fieldset><p className="helper-text">{s.t('يمكنك تحديد يوم واحد أو عدة أيام، مثل الإثنين إلى الأحد.')}</p>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" type="submit" disabled={!title.trim() || !weekdays.length || !validDate(startDate) || startDate < s.today}><Check size={16}/>{s.t('ابدأ الالتزام')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
+  return <Modal open={open} title={s.t(editing ? 'تعديل الالتزام' : 'التزام جديد')} close={close}><form className="form-stack" onSubmit={submit}><Field label={s.t('اسم الالتزام')}><input autoFocus required maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder={s.t('مثال: أترك التفاهة أو لا أسهر')}/></Field><Field label={s.t('تاريخ البدء')}><input type="date" min={editing?.startDate || s.today} value={startDate} onChange={(event) => { setStartDate(event.target.value || s.today); setError(''); }}/></Field><div className="commitment-form-grid"><Field label={s.t('مدة التحدي (بالأيام)')}><input type="number" min="1" max="3650" inputMode="numeric" required value={durationDays} onChange={(event) => setDurationDays(event.target.value)}/></Field><Field label={s.t('وقت تسجيل النتيجة')}><input type="time" value={checkInTime} onChange={(event) => setCheckInTime(event.target.value)}/></Field></div><p className="helper-text">{s.t('يبدأ التسجيل في الوقت المحدد ويبقى متاحاً حتى الوقت نفسه من اليوم التالي.')}</p><fieldset className="weekday-picker"><legend>{s.t('أيام الالتزام كل أسبوع')}</legend><div>{WEEKDAYS.map((label, index) => <button type="button" key={label} aria-pressed={weekdays.includes(index)} className={weekdays.includes(index) ? 'weekday-choice selected' : 'weekday-choice'} onClick={() => { toggleDay(index); setError(''); }}>{s.t(label)}</button>)}</div></fieldset><p className="helper-text">{s.t('يمكنك تحديد يوم واحد أو عدة أيام، مثل الإثنين إلى الأحد.')}</p>{editing && <p className="helper-text commitment-edit-note">{s.t('تسري تغييرات الأيام والموعد من اليوم، وتبقى السجلات السابقة محفوظة.')}</p>}<label className="commitment-notify-choice"><input type="checkbox" checked={reminders} onChange={(event) => setReminders(event.target.checked)}/><span><b>{s.t('ذكّرني بموعد التقييم')}</b><small>{s.t('يلزم السماح بإشعارات المتصفح وترك الموقع مفتوحاً وقت التذكير.')}</small></span></label>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" type="submit" disabled={!title.trim() || !weekdays.length || !validDate(startDate) || (!editing && startDate < s.today) || !checkInTime}><Check size={16}/>{s.t(editing ? 'حفظ التعديلات' : 'ابدأ الالتزام')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
 }
 
-function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onViewCommitments }) {
+function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onEditCommitment, onViewCommitments }) {
   const t = s.t, fd = s.fd;
   const mission = s.data.dailyMissions.find((item) => item.scheduledDate === s.effective);
   const upcoming = s.data.dailyMissions.filter((item) => item.scheduledDate > s.effective).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
@@ -321,7 +375,7 @@ function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onViewCommitm
   };
   return <div className="page-stack">
     {s.weeklyReminder && <section className="panel reminder-panel"><div className="reminder-copy"><span className="eyebrow">FLAME · WEEKLY</span><h2>{t('لا تنسَ تحصيل هذا الأسبوع')}</h2><p>{t('حدد فترة التقرير ومحتواه، ثم احفظه PDF.')}</p></div><button className="button primary" onClick={onWeekly}><Download size={17}/>{t('إعداد التقرير')}</button></section>}
-    <CommitmentsHomeSection s={s} onAdd={onAddCommitment} onView={onViewCommitments}/>
+    <CommitmentsHomeSection s={s} onAdd={onAddCommitment} onView={onViewCommitments} onEdit={onEditCommitment}/>
 
     <section className="panel mission-panel">
       <div className="section-heading"><span className="heading-icon"><Target size={19}/></span><div><h2>{t(s.effective === s.today ? 'مهمتي اليوم' : 'مهام الأمس حتى 08:00')}</h2><p>{mission ? `${fd(s.effective)} · ${mission.tasks.filter((task) => task.completed).length} / ${mission.tasks.length} ${t('اكتملت')}` : `${fd(s.effective)} · ${t('لا توجد مهام لهذا اليوم، استعد لمهمتك القادمة.')}`}</p></div><strong className="completion-percent">{mission?.tasks.length ? Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100) : 0}%</strong></div>
@@ -703,6 +757,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false), [reportDate, setReportDate] = useState(today);
   const [commitmentOpen, setCommitmentOpen] = useState(false);
+  const [commitmentEdit, setCommitmentEdit] = useState(null);
   const fileRef = useRef(null);
   const lang = data.settings.lang;
   const t = (text) => tr(text, lang);
@@ -729,22 +784,33 @@ export default function App() {
     }),
     toggleTask: (missionId, taskId) => update((current) => { const activeDate = effectiveDay(); return { ...current, dailyMissions: current.dailyMissions.map((mission) => mission.id === missionId && mission.scheduledDate === activeDate ? { ...mission, tasks: mission.tasks.map((task) => task.id === taskId ? { ...task, completed: !task.completed } : task) } : mission) }; }),
     recordDay: (date, status) => update((current) => ({ ...current, disciplineRecords: [...current.disciplineRecords.filter((record) => record.date !== date), { date, status }].sort((a, b) => a.date.localeCompare(b.date)) })),
-    addCommitment: ({ title, startDate, weekdays }) => {
+    addCommitment: ({ title, startDate, weekdays, durationDays, checkInTime, reminders }) => {
       const id = uid();
       const nextStyle = Math.max(-1, ...dataRef.current.commitments.map((commitment) => commitment.flameStyle ?? -1)) + 1;
       const next = update((current, currentDate) => {
         const cleanTitle = title.trim().slice(0, 120);
         const cleanWeekdays = [...new Set(Array.isArray(weekdays) ? weekdays : [])].filter((day) => Number.isInteger(day) && day >= 0 && day <= 6).sort((a, b) => a - b);
-        if (!cleanTitle || !cleanWeekdays.length || !validDate(startDate) || startDate < currentDate) return current;
-        return { ...current, commitments: [...current.commitments, { id, title: cleanTitle, startDate, weekdays: cleanWeekdays, records: [], flameStyle: nextStyle }] };
+        if (!cleanTitle || !cleanWeekdays.length || !validDate(startDate) || startDate < currentDate || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(checkInTime)) return current;
+        return { ...current, commitments: [...current.commitments, { id, title: cleanTitle, startDate, scheduleStartDate: startDate, weekdays: cleanWeekdays, durationDays, checkInTime, reminders: !!reminders, reminderSentDate: '', records: [], flameStyle: nextStyle }] };
       });
       return !!next?.commitments.some((commitment) => commitment.id === id);
     },
+    updateCommitment: (id, { title, startDate, weekdays, durationDays, checkInTime, reminders }) => {
+      const next = update((current, currentDate) => {
+        const existing = current.commitments.find((commitment) => commitment.id === id && commitment.id !== LEGACY_COMMITMENT_ID);
+        const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
+        const cleanWeekdays = [...new Set(Array.isArray(weekdays) ? weekdays : [])].filter((day) => Number.isInteger(day) && day >= 0 && day <= 6).sort((a, b) => a - b);
+        if (!existing || !cleanTitle || !cleanWeekdays.length || !validDate(startDate) || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(checkInTime)) return current;
+        return { ...current, commitments: current.commitments.map((commitment) => commitment.id === id ? { ...commitment, title: cleanTitle, startDate, scheduleStartDate: startDate > currentDate ? startDate : currentDate, weekdays: cleanWeekdays, durationDays, checkInTime, reminders: !!reminders, reminderSentDate: commitment.checkInTime === checkInTime ? commitment.reminderSentDate : '' } : commitment) };
+      });
+      return !!next?.commitments.some((commitment) => commitment.id === id && commitment.title === title.trim());
+    },
+    setCommitmentReminder: (id, enabled) => update((current) => ({ ...current, commitments: current.commitments.map((commitment) => commitment.id === id && commitment.id !== LEGACY_COMMITMENT_ID ? { ...commitment, reminders: !!enabled, reminderSentDate: '' } : commitment) })),
     recordCommitmentDay: (id, date, status) => update((current) => {
       if (!date || !['success', 'failure'].includes(status)) return current;
       const record = { date, status };
       return { ...current, commitments: current.commitments.map((commitment) => {
-        if (commitment.id !== id || !commitment.weekdays.includes(weekdayIndex(date)) || date < commitment.startDate) return commitment;
+        if (commitment.id !== id || !commitment.weekdays.includes(weekdayIndex(date)) || !commitmentIncludesDate(commitment, date)) return commitment;
         return { ...commitment, records: [...commitment.records.filter((existing) => existing.date !== date), record].sort((a, b) => a.date.localeCompare(b.date)) };
       }), disciplineRecords: id === LEGACY_COMMITMENT_ID ? [...current.disciplineRecords.filter((item) => item.date !== date), record].sort((a, b) => a.date.localeCompare(b.date)) : current.disciplineRecords };
     }),
@@ -777,7 +843,7 @@ export default function App() {
     setAccent: (accentColor) => update((current) => ({ ...current, settings: { ...current.settings, accentColor } })),
     setUserProfile: (userName, signature) => update((current) => ({ ...current, settings: { ...current.settings, userName: userName.trim().slice(0, 100), signature } })),
     importData: (text) => { try { const imported = normalizeData(JSON.parse(text)); if (!imported) { window.alert(t('ملف غير صالح')); return false; } update(() => imported); window.alert(t('تم الاستيراد')); return true; } catch { window.alert(t('ملف غير صالح')); return false; } },
-  }), [data, today, yesterday, nextMissionDate, effective, lang, score, currentStats.current, currentStats.best, wins, losses]);
+    }), [data, today, yesterday, nextMissionDate, effective, lang, score, currentStats.current, currentStats.best, wins, losses]);
 
   function update(mutator) {
     const current = dataRef.current;
@@ -805,6 +871,32 @@ export default function App() {
     return () => { window.clearInterval(interval); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, []);
   useEffect(() => {
+    const sendDueReminders = () => {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const now = new Date(), todayKey = dateKey(now), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const due = dataRef.current.commitments.filter((commitment) => commitment.id !== LEGACY_COMMITMENT_ID && commitment.reminders && commitment.reminderSentDate !== todayKey && commitment.weekdays.includes(weekdayIndex(todayKey)) && commitmentIncludesDate(commitment, todayKey) && time >= commitment.checkInTime && !commitment.records.some((record) => record.date === todayKey));
+      if (!due.length) return;
+      due.forEach((commitment) => {
+        try {
+          const language = dataRef.current.settings.lang;
+          const title = tr('حان وقت تسجيل التزامك', language);
+          const options = { body: `${commitment.title} · ${tr('حدد نتيجة اليوم', language)}`, icon: './icon.svg', tag: `flame-commitment-${commitment.id}-${todayKey}` };
+          if (navigator.serviceWorker?.controller) navigator.serviceWorker.ready.then((registration) => registration.showNotification(title, options)).catch(() => new Notification(title, options));
+          else {
+            const notification = new Notification(title, options);
+            notification.onclick = () => { window.focus(); notification.close(); };
+          }
+        } catch { /* notifications may be unavailable in this browser context */ }
+      });
+      const sent = new Set(due.map((commitment) => commitment.id));
+      update((current) => ({ ...current, commitments: current.commitments.map((commitment) => sent.has(commitment.id) ? { ...commitment, reminderSentDate: todayKey } : commitment) }));
+    };
+    sendDueReminders();
+    const timer = window.setInterval(sendDueReminders, 30000);
+    window.addEventListener('focus', sendDueReminders);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', sendDueReminders); };
+  }, []);
+  useEffect(() => {
     document.documentElement.lang = lang; document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.dataset.accent = data.settings.accentColor;
     document.documentElement.classList.toggle('light', data.settings.theme === 'light' || (data.settings.theme === 'system' && window.matchMedia?.('(prefers-color-scheme: light)').matches));
@@ -824,18 +916,20 @@ export default function App() {
   const context = { ...s, weeklyReminder, today, tomorrow, nextMissionDate };
   const openPlan = (mission = null, date = nextMissionDate) => { setPlanEdit(mission); setPlanInitialDate(mission?.scheduledDate || date || nextMissionDate); setPlanOpen(true); };
   const openEvent = (event = null) => { setEventEdit(event); setEventOpen(true); };
+  const openCommitment = (editing = null) => { setCommitmentEdit(editing); setCommitmentOpen(true); };
+  const closeCommitment = () => { setCommitmentOpen(false); setCommitmentEdit(null); };
   const nav = [[Home,'الرئيسية','home'],[Target,'التزاماتي','commitments'],[Activity,'السجل','history'],[Receipt,'المصاريف','expenses'],[CalendarDays,'المواعيد','events'],[BarChart3,'الإحصائيات','stats']];
   return <Ctx.Provider value={context}><div className="app-shell">
     <header className="app-header"><div className="header-brand"><span className="brand-flame"><Flame size={19} fill="currentColor"/></span><span><b>FLAME</b><small>KEEP YOUR FIRE</small></span></div><div className="header-actions"><div className="today-label"><b>{fd(today)}</b><small>{t('احمِ وقتك، واحفظ شعلتك.')}</small></div><button className="language-button" onClick={() => update((current) => ({ ...current, settings: { ...current.settings, lang: current.settings.lang === 'ar' ? 'fr' : 'ar' } }))}><Languages size={15}/>{lang === 'ar' ? 'FR' : 'AR'}</button></div></header>
     {data.settings.userName && <button className="app-identity" dir={lang === 'ar' ? 'rtl' : 'ltr'} onClick={() => setProfileOpen(true)}><span>{t('المستخدم')}</span><b>{data.settings.userName}</b><Pencil size={14}/></button>}
-    <main className="main-content">{tab === 'home' && <HomePage s={context} onPlan={openPlan} onEvent={() => openEvent()} onWeekly={() => openReport()} onAddCommitment={() => setCommitmentOpen(true)} onViewCommitments={() => setTab('commitments')}/ >}{tab === 'commitments' && <CommitmentsPage s={context} onAdd={() => setCommitmentOpen(true)}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</main>
+    <main className="main-content">{tab === 'home' && <HomePage s={context} onPlan={openPlan} onEvent={() => openEvent()} onWeekly={() => openReport()} onAddCommitment={() => openCommitment()} onEditCommitment={openCommitment} onViewCommitments={() => setTab('commitments')}/ >}{tab === 'commitments' && <CommitmentsPage s={context} onAdd={() => openCommitment()} onEdit={openCommitment}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</main>
     <SiteFooter s={context}/>
     {(tab === 'home' || tab === 'events') && <button className="floating-add" aria-label={t(tab === 'home' ? 'مهمة جديدة' : 'موعد جديد')} onClick={() => tab === 'home' ? openPlan() : openEvent()}>{tab === 'home' ? <ListChecks size={20}/> : <CalendarPlus size={20}/>}</button>}
     <nav className="bottom-nav" aria-label="Navigation"><div>{nav.map(([Icon, label, id]) => <button key={id} className={tab === id ? 'nav-item nav-active' : 'nav-item'} onClick={() => setTab(id)}><Icon size={20}/><span>{t(label)}</span></button>)}</div></nav>
     <PlanModal s={context} open={planOpen} close={() => setPlanOpen(false)} editing={planEdit} initialDate={planInitialDate}/><EventModal s={context} open={eventOpen} close={() => setEventOpen(false)} editing={eventEdit}/>
     <ReportChooser s={context} open={reportOpen} close={() => setReportOpen(false)} initialDate={reportDate}/>
     <ProfileModal s={context} open={profileOpen} close={() => setProfileOpen(false)}/>
-    <CommitmentModal s={context} open={commitmentOpen} close={() => setCommitmentOpen(false)} onCreated={() => setTab('commitments')}/>
+    <CommitmentModal s={context} open={commitmentOpen} close={closeCommitment} editing={commitmentEdit} onCreated={() => setTab('commitments')}/>
     <Modal open={resetOpen} title={t('مسح كل البيانات؟')} close={() => setResetOpen(false)}><p className="modal-copy">{t('سيتم حذف الانضباط والالتزامات والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p><div className="form-actions"><button className="button subtle" onClick={() => setResetOpen(false)}>{t('إلغاء')}</button><button className="button danger-solid" onClick={() => { const current = dataRef.current; const cleared = emptyData(); cleared.settings = { ...current.settings, startDate: dateKey() }; dataRef.current = cleared; setData(cleared); saveData(cleared); setResetOpen(false); }}>{t('نعم، امسح')}</button></div></Modal>
     {(!data.settings.userName || !data.settings.signature) && <ProfileSetup s={context} onSave={s.setUserProfile}/>}
   </div></Ctx.Provider>;

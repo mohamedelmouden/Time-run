@@ -50,3 +50,13 @@ self.addEventListener('fetch', (event) => {
     return (await caches.match(request)) || response;
   }).catch(async () => (await caches.match(request)) || Response.error()));
 });
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const app = windows.find((client) => SAME_ORIGIN(client.url));
+    if (app) return app.focus();
+    return self.clients.openWindow(APP_ROOT);
+  })());
+});

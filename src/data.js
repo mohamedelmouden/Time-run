@@ -24,6 +24,18 @@ export const shiftDate = (key, amount) => {
 export const uid = () => globalThis.crypto?.randomUUID?.() ?? `flame-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 export const validDate = (value) => typeof value === 'string' && DATE_FORMAT.test(value) && !Number.isNaN(new Date(`${value}T12:00:00`).getTime()) && dateKey(new Date(`${value}T12:00:00`)) === value;
 export const weekdayIndex = (key) => (new Date(`${key}T12:00:00`).getDay() + 6) % 7;
+const validTime = (value) => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+export const commitmentEndDate = (commitment) => Number.isInteger(commitment.durationDays) && commitment.durationDays > 0 ? shiftDate(commitment.startDate, commitment.durationDays - 1) : null;
+export const commitmentIncludesDate = (commitment, day) => day >= (commitment.scheduleStartDate || commitment.startDate) && (!commitmentEndDate(commitment) || day <= commitmentEndDate(commitment));
+
+// A scheduled day opens at its own check-in time and stays editable until
+// that time on the following calendar day.
+export function markableCommitmentDay(commitment, now = new Date()) {
+  const today = dateKey(now), time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const day = time >= (validTime(commitment.checkInTime) ? commitment.checkInTime : '22:00') ? today : shiftDate(today, -1);
+  if (!commitment.weekdays.includes(weekdayIndex(day)) || !commitmentIncludesDate(commitment, day)) return null;
+  return day;
+}
 
 export function previousCommitmentDay(commitment, from) {
   for (let offset = 1; offset <= 7; offset += 1) {
@@ -70,7 +82,7 @@ export function commitmentStreak(commitment, effective) {
 
 export const emptyData = () => ({
   version: 3,
-  disciplineRecords: [], commitments: [{ id: LEGACY_COMMITMENT_ID, title: 'ترك التفاهة', startDate: dateKey(), weekdays: [0, 1, 2, 3, 4, 5, 6], records: [], flameStyle: 0 }], expenseEntries: [], dailyMissions: [], importantEvents: [],
+  disciplineRecords: [], commitments: [{ id: LEGACY_COMMITMENT_ID, title: 'ترك التفاهة', startDate: dateKey(), scheduleStartDate: dateKey(), weekdays: [0, 1, 2, 3, 4, 5, 6], records: [], flameStyle: 0, checkInTime: '22:00', durationDays: null, reminders: false, reminderSentDate: '' }], expenseEntries: [], dailyMissions: [], importantEvents: [],
   settings: { theme: 'dark', accentColor: 'orange', lang: 'ar', startDate: dateKey(), userName: '', signature: '' },
 });
 
@@ -90,17 +102,23 @@ export function normalizeData(raw) {
     if (!weekdays.length) continue;
     const commitmentRecords = new Map();
     for (const record of Array.isArray(item.records) ? item.records : []) {
-      if (record && validDate(record.date) && record.date >= item.startDate && weekdays.includes(weekdayIndex(record.date)) && ['success', 'failure'].includes(record.status)) {
+      if (record && validDate(record.date) && ['success', 'failure'].includes(record.status)) {
         commitmentRecords.set(record.date, { date: record.date, status: record.status, ...(record.auto ? { auto: true } : {}) });
       }
     }
+    const durationDays = Number.isInteger(item.durationDays) && item.durationDays >= 1 && item.durationDays <= 3650 ? item.durationDays : null;
     commitments.set(item.id, {
       id: item.id,
       title: item.title.trim().slice(0, 120),
       startDate: item.startDate,
+      scheduleStartDate: validDate(item.scheduleStartDate) && item.scheduleStartDate >= item.startDate ? item.scheduleStartDate : item.startDate,
       weekdays,
       records: [...commitmentRecords.values()].sort((a, b) => a.date.localeCompare(b.date)),
       flameStyle: Number.isInteger(item.flameStyle) && item.flameStyle >= 0 && item.flameStyle <= 100000 ? item.flameStyle : commitments.size + 1,
+      checkInTime: validTime(item.checkInTime) ? item.checkInTime : '22:00',
+      durationDays,
+      reminders: !!item.reminders,
+      reminderSentDate: validDate(item.reminderSentDate) ? item.reminderSentDate : '',
     });
   }
   data.commitments = [...commitments.values()];
@@ -155,9 +173,10 @@ export function normalizeData(raw) {
     id: LEGACY_COMMITMENT_ID,
     title: 'ترك التفاهة',
     startDate: data.settings.startDate,
+    scheduleStartDate: data.settings.startDate,
     weekdays: [0, 1, 2, 3, 4, 5, 6],
     records: [...legacyRecords.values()].filter((record) => record.date >= data.settings.startDate).sort((a, b) => a.date.localeCompare(b.date)),
-    flameStyle: 0,
+    flameStyle: 0, checkInTime: '22:00', durationDays: null, reminders: false, reminderSentDate: '',
   };
   const usedFlames = new Set([0]);
   const customCommitments = [...commitments.values()].filter((item) => item.id !== LEGACY_COMMITMENT_ID).map((item, index) => {
@@ -217,8 +236,14 @@ export function syncData(data, today = dateKey(), now = new Date()) {
   const commitments = data.commitments.map((commitment) => {
     const have = new Set(commitment.records.map((record) => record.date));
     const missing = [];
-    for (let cursor = commitment.startDate; cursor < effectiveDay(now); cursor = shiftDate(cursor, 1)) {
-      if (commitment.weekdays.includes(weekdayIndex(cursor)) && !have.has(cursor)) missing.push({ date: cursor, status: 'failure', auto: true });
+    const end = commitmentEndDate(commitment);
+    const finalDay = end && end < dateKey(now) ? end : dateKey(now);
+    for (let cursor = commitment.scheduleStartDate || commitment.startDate; cursor <= finalDay; cursor = shiftDate(cursor, 1)) {
+      if (!commitment.weekdays.includes(weekdayIndex(cursor)) || !commitmentIncludesDate(commitment, cursor) || have.has(cursor)) continue;
+      const deadline = commitment.id === LEGACY_COMMITMENT_ID
+        ? new Date(`${shiftDate(cursor, 1)}T08:00:00`)
+        : new Date(`${shiftDate(cursor, 1)}T${validTime(commitment.checkInTime) ? commitment.checkInTime : '22:00'}:00`);
+      if (deadline <= now) missing.push({ date: cursor, status: 'failure', auto: true });
     }
     if (!missing.length) return commitment;
     changed = true;

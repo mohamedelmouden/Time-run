@@ -278,3 +278,46 @@
 .legacy-streak-heading{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:1px 2px 8px;text-align:start}
 .legacy-streak-heading>b{padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel-raised);color:var(--muted);font-size:10px}
 @media(max-width:390px){.bottom-nav{padding-inline:4px}.nav-item span{font-size:7.5px}.nav-item svg{width:18px;height:18px}.commitments-home-section .section-title-row{align-items:flex-start}.commitments-home-section .section-title-row .button{padding-inline:8px;font-size:10px}.commitment-card{padding:12px}.weekday-picker>div{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Commitment cards share one clear layout on the home page and full page. */
+.commitment-list{gap:12px}
+.commitment-card{position:relative;overflow:hidden;gap:12px;border-color:color-mix(in srgb,var(--primary) 12%,var(--line));background:linear-gradient(145deg,color-mix(in srgb,var(--primary) 4%,var(--panel)),var(--panel-glass) 43%);animation:commitment-card-arrive .42s cubic-bezier(.2,.7,.25,1) both}
+.commitment-card:before{content:"";position:absolute;inset-inline-start:0;top:18px;bottom:18px;width:2px;border-radius:2px;background:linear-gradient(180deg,transparent,var(--primary),var(--glow),transparent);opacity:.8}
+.commitment-card-head{align-items:flex-start}
+.commitment-card-title{gap:11px}
+.commitment-card-title h3{font-size:15px;line-height:1.35}
+.commitment-card-title small{font-size:10px}
+.commitment-card .row-actions{gap:5px}
+.commitment-card .row-actions .icon-button{width:31px;height:31px;border-radius:11px;background:color-mix(in srgb,var(--panel-raised) 78%,transparent)}
+.commitment-weekdays{gap:6px}
+.commitment-weekdays span{padding:4px 9px;border-radius:10px;background:color-mix(in srgb,var(--primary) 8%,var(--panel-raised));font-size:10px;font-weight:600}
+.commitment-progress-stack{display:grid;gap:9px}
+.commitment-progress-block{display:grid;gap:6px;padding:9px 11px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--panel-raised) 73%,transparent)}
+.commitment-progress-block>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.commitment-progress-block>div:first-child>span{color:var(--muted);font-size:10px}
+.commitment-progress-block>div:first-child>b{max-width:65%;overflow:hidden;color:var(--text);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.commitment-progress-track{height:7px;overflow:hidden;border-radius:999px;background:var(--track);direction:rtl}
+.commitment-progress-track>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--glow),var(--primary));box-shadow:0 0 11px color-mix(in srgb,var(--primary) 35%,transparent);transition:width .5s ease}
+.daily-window-progress .commitment-progress-track>span{background:linear-gradient(90deg,#64dcb0,var(--primary));transform-origin:right center;animation:commitment-bar-glow 2.8s ease-in-out infinite}
+.challenge-progress .commitment-progress-track>span{background:linear-gradient(90deg,#a78bfa,var(--primary),var(--glow))}
+.commitment-record-box{border-color:color-mix(in srgb,var(--primary) 13%,var(--line));background:color-mix(in srgb,var(--panel-raised) 88%,transparent)}
+.commitment-record-box .mark-actions{gap:9px}
+.commitment-reminder-link{justify-self:start;display:inline-flex;align-items:center;gap:6px;padding:4px 2px;border:0;background:transparent;color:var(--muted);font-size:10px;cursor:pointer;transition:color .15s ease,transform .15s ease}
+.commitment-reminder-link:hover{color:var(--glow);transform:translateY(-1px)}
+.commitment-reminder-status{display:inline-flex;align-items:center;gap:6px;color:var(--ok);font-size:10px}
+.commitment-edit-note{margin-top:-5px}
+.commitment-card-compact{padding:13px}
+.commitment-card-compact .commitment-card-title h3{font-size:14px}
+.commitment-card-compact .commitment-weekdays span{font-size:9px;padding:3px 7px}
+.commitment-card-compact .commitment-progress-block{padding:8px 9px}
+.commitment-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.commitment-form-grid input{min-width:0}
+.commitment-notify-choice{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel-raised);cursor:pointer}
+.commitment-notify-choice input{width:16px;height:16px;flex:none;margin:2px 0 0;accent-color:var(--primary)}
+.commitment-notify-choice span{display:grid;gap:3px}
+.commitment-notify-choice b{font-size:11px}
+.commitment-notify-choice small{color:var(--muted);font-size:10px;line-height:1.5}
+@keyframes commitment-card-arrive{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes commitment-bar-glow{0%,100%{filter:saturate(.96);box-shadow:none}50%{filter:saturate(1.2);box-shadow:0 0 9px color-mix(in srgb,var(--glow) 32%,transparent)}}
+@media(max-width:390px){.commitment-form-grid{grid-template-columns:1fr 1fr;gap:7px}.commitment-progress-block>div:first-child>span,.commitment-progress-block>div:first-child>b{font-size:9px}.commitment-card .row-actions{gap:3px}.commitment-card .row-actions .icon-button{width:29px;height:29px}}
+@media(prefers-reduced-motion:reduce){.commitment-card,.commitment-progress-track>span,.daily-window-progress .commitment-progress-track>span{animation:none!important;transition:none!important}}
