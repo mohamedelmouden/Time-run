@@ -24,24 +24,32 @@ export const shiftDate = (key, amount) => {
 export const uid = () => globalThis.crypto?.randomUUID?.() ?? `flame-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 export const validDate = (value) => typeof value === 'string' && DATE_FORMAT.test(value) && !Number.isNaN(new Date(`${value}T12:00:00`).getTime()) && dateKey(new Date(`${value}T12:00:00`)) === value;
 export const weekdayIndex = (key) => (new Date(`${key}T12:00:00`).getDay() + 6) % 7;
-const validTime = (value) => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
-export const commitmentEndDate = (commitment) => Number.isInteger(commitment.durationDays) && commitment.durationDays > 0 ? shiftDate(commitment.startDate, commitment.durationDays - 1) : null;
-export const commitmentIncludesDate = (commitment, day) => day >= (commitment.scheduleStartDate || commitment.startDate) && (!commitmentEndDate(commitment) || day <= commitmentEndDate(commitment));
+export const validTime = (value) => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+export const validCommitmentWindow = (start, end) => validTime(start) && validTime(end) && start < end;
+export const validCommitmentSchedule = (start, end, evaluation) => validCommitmentWindow(start, end) && validTime(evaluation) && evaluation >= end;
+export const commitmentIncludesDate = (commitment, day) => day >= (commitment.scheduleStartDate || commitment.startDate);
 
-// A scheduled day opens at its own check-in time and stays editable until
-// that time on the following calendar day.
+// Result entry opens at the configured evaluation time and remains editable
+// until the next scheduled day's window begins.
 export function markableCommitmentDay(commitment, now = new Date()) {
-  const today = dateKey(now), time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  const day = time >= (validTime(commitment.checkInTime) ? commitment.checkInTime : '22:00') ? today : shiftDate(today, -1);
-  if (!commitment.weekdays.includes(weekdayIndex(day)) || !commitmentIncludesDate(commitment, day)) return null;
-  return day;
+  const today = dateKey(now);
+  const startTime = validTime(commitment.windowStartTime) ? commitment.windowStartTime : '08:30';
+  const evaluationTime = validTime(commitment.checkInTime) ? commitment.checkInTime : (validTime(commitment.windowEndTime) ? commitment.windowEndTime : '22:30');
+  for (let offset = 0; offset <= 7; offset += 1) {
+    const day = shiftDate(today, -offset);
+    if (!commitment.weekdays.includes(weekdayIndex(day)) || !commitmentIncludesDate(commitment, day)) continue;
+    if (now < new Date(`${day}T${evaluationTime}:00`)) continue;
+    const nextDay = nextCommitmentDay(commitment, day);
+    if (nextDay && now < new Date(`${nextDay}T${startTime}:00`)) return day;
+  }
+  return null;
 }
 
 export function previousCommitmentDay(commitment, from) {
   for (let offset = 1; offset <= 7; offset += 1) {
     const day = shiftDate(from, -offset);
-    if (day < commitment.startDate) return null;
-    if (commitment.weekdays.includes(weekdayIndex(day))) return day;
+    if (day < (commitment.scheduleStartDate || commitment.startDate)) return null;
+    if (commitment.weekdays.includes(weekdayIndex(day)) && commitmentIncludesDate(commitment, day)) return day;
   }
   return null;
 }
@@ -82,7 +90,7 @@ export function commitmentStreak(commitment, effective) {
 
 export const emptyData = () => ({
   version: 3,
-  disciplineRecords: [], commitments: [{ id: LEGACY_COMMITMENT_ID, title: 'ترك التفاهة', startDate: dateKey(), scheduleStartDate: dateKey(), weekdays: [0, 1, 2, 3, 4, 5, 6], records: [], flameStyle: 0, checkInTime: '22:00', durationDays: null, reminders: false, reminderSentDate: '' }], expenseEntries: [], dailyMissions: [], importantEvents: [],
+  disciplineRecords: [], commitments: [{ id: LEGACY_COMMITMENT_ID, title: 'ترك التفاهة', startDate: dateKey(), scheduleStartDate: dateKey(), weekdays: [0, 1, 2, 3, 4, 5, 6], records: [], flameStyle: 0, windowStartTime: '22:00', windowEndTime: '08:00', reminders: false, reminderSentDate: '' }], expenseEntries: [], dailyMissions: [], importantEvents: [],
   settings: { theme: 'dark', accentColor: 'orange', lang: 'ar', startDate: dateKey(), userName: '', signature: '' },
 });
 
@@ -106,7 +114,14 @@ export function normalizeData(raw) {
         commitmentRecords.set(record.date, { date: record.date, status: record.status, ...(record.auto ? { auto: true } : {}) });
       }
     }
-    const durationDays = Number.isInteger(item.durationDays) && item.durationDays >= 1 && item.durationDays <= 3650 ? item.durationDays : null;
+    const windowStartTime = validTime(item.windowStartTime) ? item.windowStartTime : '08:30';
+    const legacyWindowEnd = validTime(item.checkInTime) && item.checkInTime > windowStartTime ? item.checkInTime : '22:30';
+    const windowEndTime = validTime(item.windowEndTime) && item.windowEndTime > windowStartTime
+      ? item.windowEndTime
+      : legacyWindowEnd;
+    const checkInTime = validTime(item.checkInTime) && item.checkInTime >= windowEndTime
+      ? item.checkInTime
+      : windowEndTime;
     commitments.set(item.id, {
       id: item.id,
       title: item.title.trim().slice(0, 120),
@@ -115,8 +130,9 @@ export function normalizeData(raw) {
       weekdays,
       records: [...commitmentRecords.values()].sort((a, b) => a.date.localeCompare(b.date)),
       flameStyle: Number.isInteger(item.flameStyle) && item.flameStyle >= 0 && item.flameStyle <= 100000 ? item.flameStyle : commitments.size + 1,
-      checkInTime: validTime(item.checkInTime) ? item.checkInTime : '22:00',
-      durationDays,
+      windowStartTime,
+      windowEndTime,
+      checkInTime,
       reminders: !!item.reminders,
       reminderSentDate: validDate(item.reminderSentDate) ? item.reminderSentDate : '',
     });
@@ -176,7 +192,7 @@ export function normalizeData(raw) {
     scheduleStartDate: data.settings.startDate,
     weekdays: [0, 1, 2, 3, 4, 5, 6],
     records: [...legacyRecords.values()].filter((record) => record.date >= data.settings.startDate).sort((a, b) => a.date.localeCompare(b.date)),
-    flameStyle: 0, checkInTime: '22:00', durationDays: null, reminders: false, reminderSentDate: '',
+    flameStyle: 0, windowStartTime: '22:00', windowEndTime: '08:00', reminders: false, reminderSentDate: '',
   };
   const usedFlames = new Set([0]);
   const customCommitments = [...commitments.values()].filter((item) => item.id !== LEGACY_COMMITMENT_ID).map((item, index) => {
@@ -236,13 +252,13 @@ export function syncData(data, today = dateKey(), now = new Date()) {
   const commitments = data.commitments.map((commitment) => {
     const have = new Set(commitment.records.map((record) => record.date));
     const missing = [];
-    const end = commitmentEndDate(commitment);
-    const finalDay = end && end < dateKey(now) ? end : dateKey(now);
+    const finalDay = dateKey(now);
     for (let cursor = commitment.scheduleStartDate || commitment.startDate; cursor <= finalDay; cursor = shiftDate(cursor, 1)) {
       if (!commitment.weekdays.includes(weekdayIndex(cursor)) || !commitmentIncludesDate(commitment, cursor) || have.has(cursor)) continue;
-      const deadline = commitment.id === LEGACY_COMMITMENT_ID
-        ? new Date(`${shiftDate(cursor, 1)}T08:00:00`)
-        : new Date(`${shiftDate(cursor, 1)}T${validTime(commitment.checkInTime) ? commitment.checkInTime : '22:00'}:00`);
+      const nextDay = commitment.id === LEGACY_COMMITMENT_ID ? shiftDate(cursor, 1) : nextCommitmentDay(commitment, cursor);
+      if (!nextDay) continue;
+      const nextStartTime = commitment.id === LEGACY_COMMITMENT_ID ? '08:00' : (validTime(commitment.windowStartTime) ? commitment.windowStartTime : '08:30');
+      const deadline = new Date(`${nextDay}T${nextStartTime}:00`);
       if (deadline <= now) missing.push({ date: cursor, status: 'failure', auto: true });
     }
     if (!missing.length) return commitment;

@@ -7,8 +7,8 @@ import {
   ShieldCheck, Sparkles, Sun, Target, Trash2, Upload, X,
 } from 'lucide-react';
 import {
-  accents, commitmentEndDate, commitmentIncludesDate, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableCommitmentDay, markableDay, normalizeData,
-  pad, points, PURCHASE_PERIODS, purchasePeriodLabels, saveData, shiftDate, streaks, syncData, uid, validDate, weekdayIndex,
+  accents, commitmentIncludesDate, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableCommitmentDay, markableDay, nextCommitmentDay, normalizeData,
+  pad, points, PURCHASE_PERIODS, purchasePeriodLabels, saveData, shiftDate, streaks, syncData, uid, validCommitmentSchedule, validCommitmentWindow, validDate, weekdayIndex,
 } from './data.js';
 import { localeTag, tr } from './i18n.js';
 
@@ -251,30 +251,55 @@ function CommitmentCard({ commitment, s, compact = false, onEdit }) {
   const required = !!day && commitment.weekdays.includes(weekdayIndex(day)) && commitmentIncludesDate(commitment, day);
   const canRecord = !!day && required;
   const stats = commitmentStreak(commitment, s.effective);
-  const checkInTime = commitment.checkInTime || '22:00';
-  const clockTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const windowStartTime = commitment.windowStartTime || '08:30';
+  const windowEndTime = commitment.windowEndTime || '22:30';
+  const checkInTime = commitment.checkInTime || windowEndTime;
+  const todayKey = dateKey(now);
+  const todayScheduled = commitment.weekdays.includes(weekdayIndex(todayKey)) && commitmentIncludesDate(commitment, todayKey);
   let periodStart, periodEnd;
+  let timeProgressLabel = 'الوقت المتبقي في التحدي اليوم';
+  let timeProgressDetail = '';
+  let dayRemaining = 0;
+  let dayRemainingRatio = 0;
+  let showDailyProgress = true;
+  let nextWindowDay = null;
   if (commitment.id === LEGACY_COMMITMENT_ID) {
-    const hour = now.getHours(), todayKey = dateKey(now), yesterdayKey = shiftDate(todayKey, -1), tomorrowKey = shiftDate(todayKey, 1);
+    const hour = now.getHours(), yesterdayKey = shiftDate(todayKey, -1), tomorrowKey = shiftDate(todayKey, 1);
     if (hour < 8) { periodStart = new Date(`${yesterdayKey}T22:00:00`); periodEnd = new Date(`${todayKey}T08:00:00`); }
     else if (hour < 22) { periodStart = new Date(`${todayKey}T08:00:00`); periodEnd = new Date(`${todayKey}T22:00:00`); }
     else { periodStart = new Date(`${todayKey}T22:00:00`); periodEnd = new Date(`${tomorrowKey}T08:00:00`); }
+    timeProgressLabel = 'الوقت المتبقي لموعد التقييم';
+    dayRemaining = Math.max(0, periodEnd.getTime() - clockNow);
+    dayRemainingRatio = Math.max(0, Math.min(1, dayRemaining / (periodEnd.getTime() - periodStart.getTime())));
+    const dayHours = Math.floor(dayRemaining / 3600000), dayMinutes = Math.floor((dayRemaining % 3600000) / 60000);
+    timeProgressDetail = `${s.t('حتى')} ${pad(periodEnd.getHours())}:${pad(periodEnd.getMinutes())} · ${new Intl.NumberFormat(localeTag(s.lang)).format(dayHours)} ${s.t('ساعات')} ${new Intl.NumberFormat(localeTag(s.lang)).format(dayMinutes)} ${s.t('دقائق')}`;
+  } else if (todayScheduled) {
+    periodStart = new Date(`${todayKey}T${windowStartTime}:00`);
+    periodEnd = new Date(`${todayKey}T${windowEndTime}:00`);
+    if (now < periodStart) {
+      dayRemaining = periodEnd.getTime() - periodStart.getTime();
+      dayRemainingRatio = 1;
+      timeProgressLabel = 'نافذة الالتزام اليوم';
+      timeProgressDetail = `${windowStartTime} – ${windowEndTime}`;
+    } else if (now < periodEnd) {
+      dayRemaining = periodEnd.getTime() - clockNow;
+      dayRemainingRatio = Math.max(0, Math.min(1, dayRemaining / (periodEnd.getTime() - periodStart.getTime())));
+      const dayHours = Math.floor(dayRemaining / 3600000), dayMinutes = Math.floor((dayRemaining % 3600000) / 60000);
+      timeProgressDetail = `${s.t('حتى')} ${windowEndTime} · ${new Intl.NumberFormat(localeTag(s.lang)).format(dayHours)} ${s.t('ساعات')} ${new Intl.NumberFormat(localeTag(s.lang)).format(dayMinutes)} ${s.t('دقائق')}`;
+    } else {
+      const nextDay = nextCommitmentDay(commitment, todayKey);
+      if (now < new Date(`${todayKey}T${checkInTime}:00`)) {
+        timeProgressLabel = 'موعد تقييم النتيجة';
+        timeProgressDetail = `${s.t('يفتح التسجيل عند')} ${checkInTime}`;
+      } else {
+        timeProgressLabel = 'انتهى وقت الالتزام اليوم';
+        timeProgressDetail = nextDay ? `${s.t('التسجيل متاح حتى')} ${s.fd(nextDay)} · ${windowStartTime}` : windowStartTime;
+      }
+    }
   } else {
-    const periodDate = clockTime >= checkInTime ? dateKey(now) : shiftDate(dateKey(now), -1);
-    periodStart = new Date(`${periodDate}T${checkInTime}:00`);
-    periodEnd = new Date(`${shiftDate(periodDate, 1)}T${checkInTime}:00`);
+    showDailyProgress = false;
+    nextWindowDay = nextCommitmentDay(commitment, todayKey);
   }
-  const dayRemaining = Math.max(0, periodEnd.getTime() - clockNow);
-  const dayRemainingRatio = Math.max(0, Math.min(1, dayRemaining / (periodEnd.getTime() - periodStart.getTime())));
-  const dayHours = Math.floor(dayRemaining / 3600000), dayMinutes = Math.floor((dayRemaining % 3600000) / 60000);
-  const periodEndLabel = `${String(periodEnd.getHours()).padStart(2, '0')}:${String(periodEnd.getMinutes()).padStart(2, '0')}`;
-  const timeProgressLabel = commitment.id === LEGACY_COMMITMENT_ID ? 'الوقت المتبقي لموعد التقييم' : 'الوقت المتبقي في اليوم';
-  const endDate = commitmentEndDate(commitment);
-  const challengeStart = new Date(`${commitment.startDate}T00:00:00`);
-  const challengeEnd = endDate ? new Date(`${shiftDate(endDate, 1)}T00:00:00`) : null;
-  const challengeRatio = challengeEnd ? Math.max(0, Math.min(1, (challengeEnd.getTime() - clockNow) / (challengeEnd.getTime() - challengeStart.getTime()))) : null;
-  const challengeDaysLeft = challengeEnd ? Math.max(0, Math.ceil((challengeEnd.getTime() - clockNow) / 86400000)) : null;
-  const numeral = (value) => new Intl.NumberFormat(localeTag(s.lang)).format(value);
   const recordResult = (status) => {
     if (record && !editMark && !window.confirm(s.t('تعديل تسجيل اليوم؟'))) return;
     s.recordCommitmentDay(commitment.id, day, status);
@@ -292,13 +317,13 @@ function CommitmentCard({ commitment, s, compact = false, onEdit }) {
     <div className="commitment-card-head"><div className="commitment-card-title"><CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')}/><div><h3>{commitment.title}</h3><small>{s.t('يبدأ الالتزام')} · {s.fd(commitment.startDate, { year: true })}</small></div></div><div className="row-actions">{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button" aria-label={s.t('تعديل الالتزام')} onClick={() => onEdit?.(commitment)}><Pencil size={15}/></button>}<button className="icon-button" aria-label={s.t(expanded ? 'إخفاء التقويم' : 'عرض التقويم')} onClick={() => setExpanded((value) => !value)}><CalendarDays size={16}/></button>{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button icon-danger" aria-label={s.t('حذف الالتزام')} onClick={() => window.confirm(s.t('حذف هذا الالتزام؟')) && s.deleteCommitment(commitment.id)}><Trash2 size={15}/></button>}</div></div>
     <div className="commitment-weekdays">{commitment.weekdays.map((index) => <span key={index}>{s.t(WEEKDAYS[index])}</span>)}</div>
     <div className="commitment-progress-stack">
-      <div className="commitment-progress-block daily-window-progress"><div><span>{s.t(timeProgressLabel)}</span><b>{s.t('حتى')} {periodEndLabel} · {numeral(dayHours)} {s.t('ساعات')} {numeral(dayMinutes)} {s.t('دقائق')}</b></div><div className="commitment-progress-track" role="progressbar" aria-label={s.t(timeProgressLabel)} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(dayRemainingRatio * 100)}><span style={{ width: `${dayRemainingRatio * 100}%` }}/></div></div>
-      {challengeRatio !== null && <div className="commitment-progress-block challenge-progress"><div><span>{s.t('تقدم التحدي')}</span><b>{challengeDaysLeft === 0 ? s.t('انتهى التحدي') : `${numeral(challengeDaysLeft)} ${s.t(challengeDaysLeft === 1 ? 'يوم متبقٍ' : 'أيام متبقية')}`}</b></div><div className="commitment-progress-track" role="progressbar" aria-label={s.t('تقدم التحدي')} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round((1 - challengeRatio) * 100)}><span style={{ width: `${(1 - challengeRatio) * 100}%` }}/></div></div>}
+      {showDailyProgress && <div className="commitment-progress-block daily-window-progress"><div><span>{s.t(timeProgressLabel)}</span><b>{timeProgressDetail}</b></div><div className="commitment-progress-track" role="progressbar" aria-label={s.t(timeProgressLabel)} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(dayRemainingRatio * 100)}><span style={{ width: `${dayRemainingRatio * 100}%` }}/></div></div>}
+      {!showDailyProgress && nextWindowDay && s.today >= (commitment.scheduleStartDate || commitment.startDate) && <div className="commitment-progress-block"><div><span>{s.t('نافذة الالتزام القادمة')}</span><b>{s.fd(nextWindowDay)} · {windowStartTime} – {windowEndTime}</b></div></div>}
     </div>
     <div className="commitment-stats"><div><b>{stats.current}</b><small>{s.t('أيام متتالية')}</small></div><div><b>{stats.best}</b><small>{s.t('أفضل سلسلة')}</small></div><div><b>{stats.total}</b><small>{s.t('أيام الالتزام')}</small></div></div>
     <div className="commitment-record-box">
       {canRecord && <div className="mark-date">{s.t('اليوم المفتوح للتسجيل:')} <b>{s.fd(day)}</b></div>}
-      {!canRecord && !record ? <p className="mark-hint">{commitment.startDate > s.today ? `${s.t('يبدأ الالتزام في')} ${s.fd(commitment.startDate, { year: true })}` : endDate && endDate < s.today ? s.t('انتهى التحدي') : !day ? commitment.id === LEGACY_COMMITMENT_ID ? s.t('التسجيل مفتوح من 22:00 إلى 08:00 فقط. إن لم تسجّل قبل 08:00 يُحتسب اليوم خسارة.') : `${s.t('يظهر التسجيل في أيام الالتزام المحددة')} · ${checkInTime}` : s.t('هذا اليوم خارج جدول الالتزام.')}</p>
+      {!canRecord && !record ? <p className="mark-hint">{commitment.startDate > s.today ? `${s.t('يبدأ الالتزام في')} ${s.fd(commitment.startDate, { year: true })}` : !day ? commitment.id === LEGACY_COMMITMENT_ID ? s.t('التسجيل مفتوح من 22:00 إلى 08:00 فقط. إن لم تسجّل قبل 08:00 يُحتسب اليوم خسارة.') : `${s.t('يفتح التسجيل عند')} ${checkInTime}` : s.t('هذا اليوم خارج جدول الالتزام.')}</p>
         : record && !editMark ? <div className="mark-result"><span className={record.status === 'success' ? 'text-success' : 'text-danger'}><CheckCircle2 size={17}/>{s.t(record.status === 'success' ? 'سجّلت التزام اليوم' : 'سجّلت إخفاق اليوم')}</span>{canRecord && <button className="button subtle compact" onClick={() => setEditMark(true)}><Pencil size={14}/>{s.t('تعديل')}</button>}</div>
           : <div className="mark-actions"><button className="button primary" onClick={() => recordResult('success')}>🔥 {s.t('التزمت اليوم')}</button><button className="button danger-soft" onClick={() => recordResult('failure')}>{s.t('لم ألتزم اليوم')}</button></div>}
     </div>
@@ -325,19 +350,20 @@ function CommitmentModal({ s, open, close, onCreated, editing }) {
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState(s.today);
   const [weekdays, setWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
-  const [durationDays, setDurationDays] = useState('30');
-  const [checkInTime, setCheckInTime] = useState('22:00');
+  const [windowStartTime, setWindowStartTime] = useState('08:30');
+  const [windowEndTime, setWindowEndTime] = useState('22:30');
+  const [checkInTime, setCheckInTime] = useState('22:30');
   const [reminders, setReminders] = useState(true);
   const [error, setError] = useState('');
-  useEffect(() => { if (open) { setTitle(editing?.title || ''); setStartDate(editing?.startDate || s.today); setWeekdays(editing?.weekdays || [0, 1, 2, 3, 4, 5, 6]); setDurationDays(editing ? (editing.durationDays ? String(editing.durationDays) : '') : '30'); setCheckInTime(editing?.checkInTime || '22:00'); setReminders(editing ? !!editing.reminders : true); setError(''); } }, [open, s.today, editing]);
+  useEffect(() => { if (open) { setTitle(editing?.title || ''); setStartDate(editing?.startDate || s.today); setWeekdays(editing?.weekdays || [0, 1, 2, 3, 4, 5, 6]); setWindowStartTime(editing?.windowStartTime || '08:30'); setWindowEndTime(editing?.windowEndTime || '22:30'); setCheckInTime(editing?.checkInTime || editing?.windowEndTime || '22:30'); setReminders(editing ? !!editing.reminders : true); setError(''); } }, [open, s.today, editing]);
   const toggleDay = (day) => setWeekdays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day].sort((a, b) => a - b));
   const submit = async (event) => {
     event.preventDefault();
     if (!title.trim()) { setError(s.t('أدخل اسم الالتزام.')); return; }
     if (!validDate(startDate) || (!editing && startDate < s.today)) { setError(s.t('اختر تاريخ بدء صالحاً.')); return; }
     if (!weekdays.length) { setError(s.t('اختر يوماً واحداً على الأقل.')); return; }
-    const duration = Number(durationDays);
-    if (!Number.isInteger(duration) || duration < 1 || duration > 3650) { setError(s.t('حدد مدة بين يوم واحد وعشر سنوات.')); return; }
+    if (!validCommitmentWindow(windowStartTime, windowEndTime)) { setError(s.t('يجب أن يكون وقت النهاية بعد وقت البداية في اليوم نفسه.')); return; }
+    if (!validCommitmentSchedule(windowStartTime, windowEndTime, checkInTime)) { setError(s.t('يجب أن يكون وقت التقييم عند نهاية النافذة أو بعدها.')); return; }
     let enableNotifications = false;
     if (reminders && 'Notification' in window) {
       try {
@@ -345,13 +371,13 @@ function CommitmentModal({ s, open, close, onCreated, editing }) {
         enableNotifications = permission === 'granted';
       } catch { enableNotifications = false; }
     }
-    const payload = { title, startDate, weekdays, durationDays: duration, checkInTime, reminders: enableNotifications };
+    const payload = { title, startDate, weekdays, windowStartTime, windowEndTime, checkInTime, reminders: enableNotifications };
     const saved = editing ? s.updateCommitment(editing.id, payload) : s.addCommitment(payload);
     if (!saved) { setError(s.t(editing ? 'تعذر تعديل الالتزام، حاول مرة أخرى.' : 'تعذر إنشاء الالتزام، حاول مرة أخرى.')); return; }
     close();
     onCreated?.();
   };
-  return <Modal open={open} title={s.t(editing ? 'تعديل الالتزام' : 'التزام جديد')} close={close}><form className="form-stack" onSubmit={submit}><Field label={s.t('اسم الالتزام')}><input autoFocus required maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder={s.t('مثال: أترك التفاهة أو لا أسهر')}/></Field><Field label={s.t('تاريخ البدء')}><input type="date" min={editing?.startDate || s.today} value={startDate} onChange={(event) => { setStartDate(event.target.value || s.today); setError(''); }}/></Field><div className="commitment-form-grid"><Field label={s.t('مدة التحدي (بالأيام)')}><input type="number" min="1" max="3650" inputMode="numeric" required value={durationDays} onChange={(event) => setDurationDays(event.target.value)}/></Field><Field label={s.t('وقت تسجيل النتيجة')}><input type="time" value={checkInTime} onChange={(event) => setCheckInTime(event.target.value)}/></Field></div><p className="helper-text">{s.t('يبدأ التسجيل في الوقت المحدد ويبقى متاحاً حتى الوقت نفسه من اليوم التالي.')}</p><fieldset className="weekday-picker"><legend>{s.t('أيام الالتزام كل أسبوع')}</legend><div>{WEEKDAYS.map((label, index) => <button type="button" key={label} aria-pressed={weekdays.includes(index)} className={weekdays.includes(index) ? 'weekday-choice selected' : 'weekday-choice'} onClick={() => { toggleDay(index); setError(''); }}>{s.t(label)}</button>)}</div></fieldset><p className="helper-text">{s.t('يمكنك تحديد يوم واحد أو عدة أيام، مثل الإثنين إلى الأحد.')}</p>{editing && <p className="helper-text commitment-edit-note">{s.t('تسري تغييرات الأيام والموعد من اليوم، وتبقى السجلات السابقة محفوظة.')}</p>}<label className="commitment-notify-choice"><input type="checkbox" checked={reminders} onChange={(event) => setReminders(event.target.checked)}/><span><b>{s.t('ذكّرني بموعد التقييم')}</b><small>{s.t('يلزم السماح بإشعارات المتصفح وترك الموقع مفتوحاً وقت التذكير.')}</small></span></label>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" type="submit" disabled={!title.trim() || !weekdays.length || !validDate(startDate) || (!editing && startDate < s.today) || !checkInTime}><Check size={16}/>{s.t(editing ? 'حفظ التعديلات' : 'ابدأ الالتزام')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
+  return <Modal open={open} title={s.t(editing ? 'تعديل الالتزام' : 'التزام جديد')} close={close}><form className="form-stack" onSubmit={submit}><Field label={s.t('اسم الالتزام')}><input autoFocus required maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder={s.t('مثال: أترك التفاهة أو لا أسهر')}/></Field><Field label={s.t('تاريخ البدء')}><input type="date" min={editing?.startDate || s.today} value={startDate} onChange={(event) => { setStartDate(event.target.value || s.today); setError(''); }}/></Field><div className="commitment-form-grid"><Field label={s.t('من وقت')}><input type="time" required value={windowStartTime} onChange={(event) => { setWindowStartTime(event.target.value); setError(''); }}/></Field><Field label={s.t('إلى وقت')}><input type="time" required value={windowEndTime} onChange={(event) => { setWindowEndTime(event.target.value); setError(''); }}/></Field></div><div className="commitment-evaluation-field"><Field label={s.t('وقت تقييم النتيجة')}><input type="time" required value={checkInTime} onChange={(event) => { setCheckInTime(event.target.value); setError(''); }}/></Field></div>{windowStartTime && windowEndTime && !validCommitmentWindow(windowStartTime, windowEndTime) && <p className="profile-form-error" role="alert">{s.t('يجب أن يكون وقت النهاية بعد وقت البداية في اليوم نفسه.')}</p>}{validCommitmentWindow(windowStartTime, windowEndTime) && checkInTime && checkInTime < windowEndTime && <p className="profile-form-error" role="alert">{s.t('يجب أن يكون وقت التقييم عند نهاية النافذة أو بعدها.')}</p>}<p className="helper-text">{s.t('حدد بداية ونهاية نافذة الالتزام لكل يوم مختار، ثم اختر وقت تقييم النتيجة. يفتح التسجيل عند هذا الموعد ويبقى متاحاً حتى بداية النافذة التالية.')}</p><fieldset className="weekday-picker"><legend>{s.t('أيام الالتزام كل أسبوع')}</legend><div>{WEEKDAYS.map((label, index) => <button type="button" key={label} aria-pressed={weekdays.includes(index)} className={weekdays.includes(index) ? 'weekday-choice selected' : 'weekday-choice'} onClick={() => { toggleDay(index); setError(''); }}>{s.t(label)}</button>)}</div></fieldset><p className="helper-text">{s.t('يمكنك تحديد يوم واحد أو عدة أيام، مثل الإثنين إلى الأحد.')}</p>{editing && <p className="helper-text commitment-edit-note">{s.t('تسري تغييرات الأيام والوقت من اليوم، وتبقى السجلات السابقة محفوظة.')}</p>}<label className="commitment-notify-choice"><input type="checkbox" checked={reminders} onChange={(event) => setReminders(event.target.checked)}/><span><b>{s.t('ذكّرني بموعد التقييم')}</b><small>{s.t('يلزم السماح بإشعارات المتصفح وترك الموقع مفتوحاً وقت التذكير.')}</small></span></label>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" type="submit" disabled={!title.trim() || !weekdays.length || !validDate(startDate) || (!editing && startDate < s.today) || !validCommitmentSchedule(windowStartTime, windowEndTime, checkInTime)}><Check size={16}/>{s.t(editing ? 'حفظ التعديلات' : 'ابدأ الالتزام')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
 }
 
 function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onEditCommitment, onViewCommitments }) {
@@ -784,24 +810,25 @@ export default function App() {
     }),
     toggleTask: (missionId, taskId) => update((current) => { const activeDate = effectiveDay(); return { ...current, dailyMissions: current.dailyMissions.map((mission) => mission.id === missionId && mission.scheduledDate === activeDate ? { ...mission, tasks: mission.tasks.map((task) => task.id === taskId ? { ...task, completed: !task.completed } : task) } : mission) }; }),
     recordDay: (date, status) => update((current) => ({ ...current, disciplineRecords: [...current.disciplineRecords.filter((record) => record.date !== date), { date, status }].sort((a, b) => a.date.localeCompare(b.date)) })),
-    addCommitment: ({ title, startDate, weekdays, durationDays, checkInTime, reminders }) => {
+    addCommitment: ({ title, startDate, weekdays, windowStartTime, windowEndTime, checkInTime, reminders }) => {
       const id = uid();
       const nextStyle = Math.max(-1, ...dataRef.current.commitments.map((commitment) => commitment.flameStyle ?? -1)) + 1;
       const next = update((current, currentDate) => {
         const cleanTitle = title.trim().slice(0, 120);
         const cleanWeekdays = [...new Set(Array.isArray(weekdays) ? weekdays : [])].filter((day) => Number.isInteger(day) && day >= 0 && day <= 6).sort((a, b) => a - b);
-        if (!cleanTitle || !cleanWeekdays.length || !validDate(startDate) || startDate < currentDate || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(checkInTime)) return current;
-        return { ...current, commitments: [...current.commitments, { id, title: cleanTitle, startDate, scheduleStartDate: startDate, weekdays: cleanWeekdays, durationDays, checkInTime, reminders: !!reminders, reminderSentDate: '', records: [], flameStyle: nextStyle }] };
+        if (!cleanTitle || !cleanWeekdays.length || !validDate(startDate) || startDate < currentDate || !validCommitmentSchedule(windowStartTime, windowEndTime, checkInTime)) return current;
+        return { ...current, commitments: [...current.commitments, { id, title: cleanTitle, startDate, scheduleStartDate: startDate, weekdays: cleanWeekdays, windowStartTime, windowEndTime, checkInTime, reminders: !!reminders, reminderSentDate: '', records: [], flameStyle: nextStyle }] };
       });
       return !!next?.commitments.some((commitment) => commitment.id === id);
     },
-    updateCommitment: (id, { title, startDate, weekdays, durationDays, checkInTime, reminders }) => {
+    updateCommitment: (id, { title, startDate, weekdays, windowStartTime, windowEndTime, checkInTime, reminders }) => {
       const next = update((current, currentDate) => {
         const existing = current.commitments.find((commitment) => commitment.id === id && commitment.id !== LEGACY_COMMITMENT_ID);
         const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
         const cleanWeekdays = [...new Set(Array.isArray(weekdays) ? weekdays : [])].filter((day) => Number.isInteger(day) && day >= 0 && day <= 6).sort((a, b) => a - b);
-        if (!existing || !cleanTitle || !cleanWeekdays.length || !validDate(startDate) || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(checkInTime)) return current;
-        return { ...current, commitments: current.commitments.map((commitment) => commitment.id === id ? { ...commitment, title: cleanTitle, startDate, scheduleStartDate: startDate > currentDate ? startDate : currentDate, weekdays: cleanWeekdays, durationDays, checkInTime, reminders: !!reminders, reminderSentDate: commitment.checkInTime === checkInTime ? commitment.reminderSentDate : '' } : commitment) };
+        if (!existing || !cleanTitle || !cleanWeekdays.length || !validDate(startDate) || !validCommitmentSchedule(windowStartTime, windowEndTime, checkInTime)) return current;
+        const scheduleChanged = existing.windowStartTime !== windowStartTime || existing.windowEndTime !== windowEndTime || existing.checkInTime !== checkInTime || existing.weekdays.join(',') !== cleanWeekdays.join(',');
+        return { ...current, commitments: current.commitments.map((commitment) => commitment.id === id ? { ...commitment, title: cleanTitle, startDate, scheduleStartDate: startDate > currentDate ? startDate : currentDate, weekdays: cleanWeekdays, windowStartTime, windowEndTime, checkInTime, reminders: !!reminders, reminderSentDate: scheduleChanged ? '' : commitment.reminderSentDate } : commitment) };
       });
       return !!next?.commitments.some((commitment) => commitment.id === id && commitment.title === title.trim());
     },
