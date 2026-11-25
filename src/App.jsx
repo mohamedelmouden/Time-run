@@ -240,7 +240,7 @@ function CommitmentFlame({ style = 0, days = 0, label, countBelow = false }) {
   </span>;
 }
 
-function CommitmentCard({ commitment, s, compact = false, onEdit }) {
+function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = false, cardId }) {
   const [expanded, setExpanded] = useState(false);
   const [editMark, setEditMark] = useState(false);
   const [clockNow, setClockNow] = useState(Date.now());
@@ -313,7 +313,7 @@ function CommitmentCard({ commitment, s, compact = false, onEdit }) {
       else window.alert(s.t('اسمح بالإشعارات من إعدادات المتصفح لتفعيل التذكير.'));
     } catch { window.alert(s.t('اسمح بالإشعارات من إعدادات المتصفح لتفعيل التذكير.')); }
   };
-  return <article className={`panel commitment-card ${compact ? 'commitment-card-compact' : ''}`}>
+  return <article id={cardId} tabIndex={focusTarget ? -1 : undefined} className={`panel commitment-card ${compact ? 'commitment-card-compact' : ''} ${focusTarget ? 'commitment-card-target' : ''}`}>
     <div className="commitment-card-head"><div className="commitment-card-title"><CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')}/><div><h3>{commitment.title}</h3><small>{s.t('يبدأ الالتزام')} · {s.fd(commitment.startDate, { year: true })}</small></div></div><div className="row-actions">{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button" aria-label={s.t('تعديل الالتزام')} onClick={() => onEdit?.(commitment)}><Pencil size={15}/></button>}<button className="icon-button" aria-label={s.t(expanded ? 'إخفاء التقويم' : 'عرض التقويم')} onClick={() => setExpanded((value) => !value)}><CalendarDays size={16}/></button>{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button icon-danger" aria-label={s.t('حذف الالتزام')} onClick={() => window.confirm(s.t('حذف هذا الالتزام؟')) && s.deleteCommitment(commitment.id)}><Trash2 size={15}/></button>}</div></div>
     <div className="commitment-weekdays">{commitment.weekdays.map((index) => <span key={index}>{s.t(WEEKDAYS[index])}</span>)}</div>
     <div className="commitment-progress-stack">
@@ -332,25 +332,35 @@ function CommitmentCard({ commitment, s, compact = false, onEdit }) {
   </article>;
 }
 
-function HomeCommitmentItem({ commitment, s }) {
+function HomeCommitmentItem({ commitment, s, onOpen }) {
   const stats = commitmentStreak(commitment, s.effective);
-  return <article className="home-commitment-item" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
+  return <button type="button" className="home-commitment-item" dir={s.lang === 'ar' ? 'rtl' : 'ltr'} aria-label={`${s.t('فتح الالتزام')}: ${commitment.title}`} onClick={() => onOpen(commitment.id)}>
     <CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')} countBelow/>
     <h3>{commitment.title}</h3>
-  </article>;
+  </button>;
 }
 
-function CommitmentsHomeSection({ s, onAdd, onView }) {
+function CommitmentsHomeSection({ s, onAdd, onView, onOpenCommitment }) {
   const commitments = [...s.data.commitments].sort((a, b) => a.startDate.localeCompare(b.startDate));
   return <section className="commitments-home-section"><div className="section-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h2>{s.t('التزاماتي')}</h2></div><button className="button primary compact" onClick={onAdd}><Plus size={15}/>{s.t('التزام جديد')}</button></div>
-    {commitments.length ? <div className="home-commitment-row">{commitments.map((commitment) => <HomeCommitmentItem key={commitment.id} commitment={commitment} s={s}/>)}</div> : <div className="panel commitment-empty"><Target size={24}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button subtle" onClick={onView}>{s.t('إدارة الالتزامات')}</button></div>}
+    {commitments.length ? <div className="home-commitment-row">{commitments.map((commitment) => <HomeCommitmentItem key={commitment.id} commitment={commitment} s={s} onOpen={onOpenCommitment}/>)}</div> : <div className="panel commitment-empty"><Target size={24}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button subtle" onClick={onView}>{s.t('إدارة الالتزامات')}</button></div>}
   </section>;
 }
 
-function CommitmentsPage({ s, onAdd, onEdit }) {
+function CommitmentsPage({ s, onAdd, onEdit, focusId }) {
   const commitments = [...s.data.commitments].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  useEffect(() => {
+    if (!focusId) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`commitment-card-${focusId}`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      target.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusId]);
   return <div className="page-stack"><div className="page-title-row"><div><span className="eyebrow">FLAME · PROMISES</span><h1>{s.t('التزاماتي')}</h1></div><button className="button primary" onClick={onAdd}><Plus size={17}/>{s.t('التزام جديد')}</button></div><p className="commitment-page-intro">{s.t('أنشئ عاداتك، وحدد أيامها، وتابع استمرارك.')}</p>
-    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s} onEdit={onEdit}/>)}</div> : <div className="panel commitment-empty"><Target size={28}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button primary" onClick={onAdd}><Plus size={16}/>{s.t('أنشئ التزاماً')}</button></div>}
+    {commitments.length ? <div className="commitment-list">{commitments.map((commitment) => <CommitmentCard key={commitment.id} commitment={commitment} s={s} onEdit={onEdit} focusTarget={commitment.id === focusId} cardId={`commitment-card-${commitment.id}`}/>)}</div> : <div className="panel commitment-empty"><Target size={28}/><p>{s.t('لا توجد التزامات بعد. ابدأ بإنشاء أول التزام لك.')}</p><button className="button primary" onClick={onAdd}><Plus size={16}/>{s.t('أنشئ التزاماً')}</button></div>}
   </div>;
 }
 
@@ -388,7 +398,7 @@ function CommitmentModal({ s, open, close, onCreated, editing }) {
   return <Modal open={open} title={s.t(editing ? 'تعديل الالتزام' : 'التزام جديد')} close={close}><form className="form-stack" onSubmit={submit}><Field label={s.t('اسم الالتزام')}><input autoFocus required maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder={s.t('مثال: أترك التفاهة أو لا أسهر')}/></Field><Field label={s.t('تاريخ البدء')}><input type="date" min={editing?.startDate || s.today} value={startDate} onChange={(event) => { setStartDate(event.target.value || s.today); setError(''); }}/></Field><div className="commitment-form-grid"><Field label={s.t('من وقت')}><input type="time" required value={windowStartTime} onChange={(event) => { setWindowStartTime(event.target.value); setError(''); }}/></Field><Field label={s.t('إلى وقت')}><input type="time" required value={windowEndTime} onChange={(event) => { setWindowEndTime(event.target.value); setError(''); }}/></Field></div><div className="commitment-evaluation-field"><Field label={s.t('وقت تقييم النتيجة')}><input type="time" required value={checkInTime} onChange={(event) => { setCheckInTime(event.target.value); setError(''); }}/></Field></div>{windowStartTime && windowEndTime && !validCommitmentWindow(windowStartTime, windowEndTime) && <p className="profile-form-error" role="alert">{s.t('يجب أن يكون وقت النهاية بعد وقت البداية في اليوم نفسه.')}</p>}{validCommitmentWindow(windowStartTime, windowEndTime) && checkInTime && checkInTime < windowEndTime && <p className="profile-form-error" role="alert">{s.t('يجب أن يكون وقت التقييم عند نهاية النافذة أو بعدها.')}</p>}<p className="helper-text">{s.t('حدد بداية ونهاية نافذة الالتزام لكل يوم مختار، ثم اختر وقت تقييم النتيجة. يفتح التسجيل عند هذا الموعد ويبقى متاحاً حتى بداية النافذة التالية.')}</p><fieldset className="weekday-picker"><legend>{s.t('أيام الالتزام كل أسبوع')}</legend><div>{WEEKDAYS.map((label, index) => <button type="button" key={label} aria-pressed={weekdays.includes(index)} className={weekdays.includes(index) ? 'weekday-choice selected' : 'weekday-choice'} onClick={() => { toggleDay(index); setError(''); }}>{s.t(label)}</button>)}</div></fieldset><p className="helper-text">{s.t('يمكنك تحديد يوم واحد أو عدة أيام، مثل الإثنين إلى الأحد.')}</p>{editing && <p className="helper-text commitment-edit-note">{s.t('تسري تغييرات الأيام والوقت من اليوم، وتبقى السجلات السابقة محفوظة.')}</p>}<label className="commitment-notify-choice"><input type="checkbox" checked={reminders} onChange={(event) => setReminders(event.target.checked)}/><span><b>{s.t('ذكّرني بموعد التقييم')}</b><small>{s.t('يلزم السماح بإشعارات المتصفح وترك الموقع مفتوحاً وقت التذكير.')}</small></span></label>{error && <p className="profile-form-error" role="alert">{error}</p>}<div className="form-actions"><button className="button primary" type="submit" disabled={!title.trim() || !weekdays.length || !validDate(startDate) || (!editing && startDate < s.today) || !validCommitmentSchedule(windowStartTime, windowEndTime, checkInTime)}><Check size={16}/>{s.t(editing ? 'حفظ التعديلات' : 'ابدأ الالتزام')}</button><button className="button subtle" type="button" onClick={close}>{s.t('إلغاء')}</button></div></form></Modal>;
 }
 
-function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onViewCommitments }) {
+function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onViewCommitments, onOpenCommitment }) {
   const t = s.t, fd = s.fd;
   const mission = s.data.dailyMissions.find((item) => item.scheduledDate === s.effective);
   const upcoming = s.data.dailyMissions.filter((item) => item.scheduledDate > s.effective).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
@@ -409,7 +419,7 @@ function HomePage({ s, onPlan, onEvent, onWeekly, onAddCommitment, onViewCommitm
   };
   return <div className="page-stack">
     {s.weeklyReminder && <section className="panel reminder-panel"><div className="reminder-copy"><span className="eyebrow">FLAME · WEEKLY</span><h2>{t('لا تنسَ تحصيل هذا الأسبوع')}</h2><p>{t('حدد فترة التقرير ومحتواه، ثم احفظه PDF.')}</p></div><button className="button primary" onClick={onWeekly}><Download size={17}/>{t('إعداد التقرير')}</button></section>}
-    <CommitmentsHomeSection s={s} onAdd={onAddCommitment} onView={onViewCommitments}/>
+    <CommitmentsHomeSection s={s} onAdd={onAddCommitment} onView={onViewCommitments} onOpenCommitment={onOpenCommitment}/>
 
     <section className="panel mission-panel">
       <div className="section-heading"><span className="heading-icon"><Target size={19}/></span><div><h2>{t(s.effective === s.today ? 'مهمتي اليوم' : 'مهام الأمس حتى 08:00')}</h2><p>{mission ? `${fd(s.effective)} · ${mission.tasks.filter((task) => task.completed).length} / ${mission.tasks.length} ${t('اكتملت')}` : `${fd(s.effective)} · ${t('لا توجد مهام لهذا اليوم، استعد لمهمتك القادمة.')}`}</p></div><strong className="completion-percent">{mission?.tasks.length ? Math.round(mission.tasks.filter((task) => task.completed).length / mission.tasks.length * 100) : 0}%</strong></div>
@@ -784,6 +794,7 @@ export default function App() {
   const [today, setToday] = useState(dateKey());
   const [workDay, setWorkDay] = useState(() => effectiveDay());
   const [tab, setTab] = useState('home');
+  const [commitmentTarget, setCommitmentTarget] = useState('');
   const [planOpen, setPlanOpen] = useState(false), [planEdit, setPlanEdit] = useState(null);
   const [planInitialDate, setPlanInitialDate] = useState('');
   const [eventOpen, setEventOpen] = useState(false), [eventEdit, setEventEdit] = useState(null);
@@ -952,19 +963,20 @@ export default function App() {
   const openPlan = (mission = null, date = nextMissionDate) => { setPlanEdit(mission); setPlanInitialDate(mission?.scheduledDate || date || nextMissionDate); setPlanOpen(true); };
   const openEvent = (event = null) => { setEventEdit(event); setEventOpen(true); };
   const openCommitment = (editing = null) => { setCommitmentEdit(editing); setCommitmentOpen(true); };
+  const viewCommitment = (id) => { setCommitmentTarget(id); setTab('commitments'); };
   const closeCommitment = () => { setCommitmentOpen(false); setCommitmentEdit(null); };
   const nav = [[Home,'الرئيسية','home'],[Target,'التزاماتي','commitments'],[Activity,'السجل','history'],[Receipt,'المصاريف','expenses'],[CalendarDays,'المواعيد','events'],[BarChart3,'الإحصائيات','stats']];
   return <Ctx.Provider value={context}><div className="app-shell">
     <header className="app-header"><div className="header-brand"><span className="brand-flame"><Flame size={19} fill="currentColor"/></span><span><b>FLAME</b><small>KEEP YOUR FIRE</small></span></div><div className="header-actions"><div className="today-label"><b>{fd(today)}</b><small>{t('احمِ وقتك، واحفظ شعلتك.')}</small></div><button className="language-button" onClick={() => update((current) => ({ ...current, settings: { ...current.settings, lang: current.settings.lang === 'ar' ? 'fr' : 'ar' } }))}><Languages size={15}/>{lang === 'ar' ? 'FR' : 'AR'}</button></div></header>
     {data.settings.userName && <button className="app-identity" dir={lang === 'ar' ? 'rtl' : 'ltr'} onClick={() => setProfileOpen(true)}><span>{t('المستخدم')}</span><b>{data.settings.userName}</b><Pencil size={14}/></button>}
-    <main className="main-content"><div className="page-transition" key={tab}>{tab === 'home' && <HomePage s={context} onPlan={openPlan} onEvent={() => openEvent()} onWeekly={() => openReport()} onAddCommitment={() => openCommitment()} onEditCommitment={openCommitment} onViewCommitments={() => setTab('commitments')}/ >}{tab === 'commitments' && <CommitmentsPage s={context} onAdd={() => openCommitment()} onEdit={openCommitment}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</div></main>
+    <main className="main-content"><div className="page-transition" key={tab}>{tab === 'home' && <HomePage s={context} onPlan={openPlan} onEvent={() => openEvent()} onWeekly={() => openReport()} onAddCommitment={() => openCommitment()} onEditCommitment={openCommitment} onViewCommitments={() => setTab('commitments')} onOpenCommitment={viewCommitment}/ >}{tab === 'commitments' && <CommitmentsPage s={context} onAdd={() => openCommitment()} onEdit={openCommitment} focusId={commitmentTarget}/ >}{tab === 'history' && <HistoryPage s={context}/ >}{tab === 'expenses' && <ExpensesPage s={context} onReport={openReport}/ >}{tab === 'events' && <EventsPage s={context} onEdit={openEvent} onAdd={() => openEvent()}/ >}{tab === 'stats' && <SettingsPage s={context} fileRef={fileRef} onReset={() => setResetOpen(true)} onReport={openReport}/ >}</div></main>
     <SiteFooter s={context}/>
     {(tab === 'home' || tab === 'events') && <button className="floating-add" aria-label={t(tab === 'home' ? 'مهمة جديدة' : 'موعد جديد')} onClick={() => tab === 'home' ? openPlan() : openEvent()}>{tab === 'home' ? <ListChecks size={20}/> : <CalendarPlus size={20}/>}</button>}
-    <nav className="bottom-nav" aria-label="Navigation"><div>{nav.map(([Icon, label, id]) => <button key={id} className={tab === id ? 'nav-item nav-active' : 'nav-item'} onClick={() => setTab(id)}><Icon size={20}/><span>{t(label)}</span></button>)}</div></nav>
+    <nav className="bottom-nav" aria-label="Navigation"><div>{nav.map(([Icon, label, id]) => <button key={id} className={tab === id ? 'nav-item nav-active' : 'nav-item'} onClick={() => { setCommitmentTarget(''); setTab(id); }}><Icon size={20}/><span>{t(label)}</span></button>)}</div></nav>
     <PlanModal s={context} open={planOpen} close={() => setPlanOpen(false)} editing={planEdit} initialDate={planInitialDate}/><EventModal s={context} open={eventOpen} close={() => setEventOpen(false)} editing={eventEdit}/>
     <ReportChooser s={context} open={reportOpen} close={() => setReportOpen(false)} initialDate={reportDate}/>
     <ProfileModal s={context} open={profileOpen} close={() => setProfileOpen(false)}/>
-    <CommitmentModal s={context} open={commitmentOpen} close={closeCommitment} editing={commitmentEdit} onCreated={() => setTab('commitments')}/>
+    <CommitmentModal s={context} open={commitmentOpen} close={closeCommitment} editing={commitmentEdit} onCreated={() => { setCommitmentTarget(''); setTab('commitments'); }}/>
     <Modal open={resetOpen} title={t('مسح كل البيانات؟')} close={() => setResetOpen(false)}><p className="modal-copy">{t('سيتم حذف الانضباط والالتزامات والمهام والمصاريف والمواعيد نهائياً. صدّر نسخة احتياطية أولاً.')}</p><div className="form-actions"><button className="button subtle" onClick={() => setResetOpen(false)}>{t('إلغاء')}</button><button className="button danger-solid" onClick={() => { const current = dataRef.current; const cleared = emptyData(); cleared.settings = { ...current.settings, startDate: dateKey() }; dataRef.current = cleared; setData(cleared); saveData(cleared); setResetOpen(false); }}>{t('نعم، امسح')}</button></div></Modal>
     {(!data.settings.userName || !data.settings.signature) && <ProfileSetup s={context} onSave={s.setUserProfile}/>}
   </div></Ctx.Provider>;
