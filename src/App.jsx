@@ -334,7 +334,16 @@ function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = 
 
 function HomeCommitmentItem({ commitment, s, onOpen }) {
   const stats = commitmentStreak(commitment, s.effective);
-  return <button type="button" className="home-commitment-item" dir={s.lang === 'ar' ? 'rtl' : 'ltr'} aria-label={`${s.t('فتح الالتزام')}: ${commitment.title}`} onClick={() => onOpen(commitment.id)}>
+  const [clockNow, setClockNow] = useState(Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setClockNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
+  const now = new Date(clockNow);
+  const resultDay = commitment.id === LEGACY_COMMITMENT_ID ? markableDay(now) : markableCommitmentDay(commitment, now);
+  const resultDue = !!resultDay
+    && commitment.weekdays.includes(weekdayIndex(resultDay))
+    && commitmentIncludesDate(commitment, resultDay)
+    && !commitment.records.some((record) => record.date === resultDay);
+  return <button type="button" className={`home-commitment-item ${resultDue ? 'home-commitment-item-due' : ''}`} dir={s.lang === 'ar' ? 'rtl' : 'ltr'} aria-label={`${s.t(resultDue ? 'سجّل نتيجة اليوم' : 'فتح الالتزام')}: ${commitment.title}`} onClick={() => onOpen(commitment.id)}>
+    {resultDue && <span className="commitment-result-due" role="status" aria-live="polite"><AlarmClock size={12}/>{s.t('سجّل نتيجة اليوم')}</span>}
     <CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')} countBelow/>
     <h3>{commitment.title}</h3>
   </button>;

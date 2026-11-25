@@ -329,6 +329,9 @@
 .home-commitment-item{appearance:none;color:var(--text);font:inherit;text-align:center;cursor:pointer;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
 .home-commitment-item:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--primary) 48%,var(--line));box-shadow:0 8px 22px color-mix(in srgb,var(--primary) 12%,transparent)}
 .home-commitment-item:active{transform:scale(.97)}
+.home-commitment-item-due{border-color:color-mix(in srgb,var(--primary) 42%,var(--line));box-shadow:0 0 16px color-mix(in srgb,var(--primary) 12%,transparent)}
+.commitment-result-due{width:100%;min-height:22px;display:flex;align-items:center;justify-content:center;gap:4px;padding:4px 5px;border:1px solid color-mix(in srgb,var(--primary) 27%,var(--line));border-radius:999px;background:color-mix(in srgb,var(--primary) 10%,var(--panel));color:var(--primary);font-size:9px;font-weight:700;line-height:1.2}
+.commitment-result-due svg{flex:none}
 .home-commitment-item h3{max-width:100%;margin:0;overflow-wrap:anywhere;color:var(--text);font-size:11px;line-height:1.4}
 .commitment-flame.commitment-flame-count-below{width:54px;height:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:0}
 .commitment-flame-count-below .commitment-flame-aura{inset:4px 5px auto;height:44px}
