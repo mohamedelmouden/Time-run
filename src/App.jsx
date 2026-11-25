@@ -55,12 +55,12 @@ function Modal({ open, title, close, children, wide = false }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [open, close]);
   if (!open) return null;
-  return <div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+  return createPortal(<div className="modal-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
     <section className={`modal-card ${wide ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
       <header className="modal-head"><h2>{title}</h2><button className="icon-button" onClick={close} aria-label="إغلاق"><X size={19}/></button></header>
       <div className="modal-body">{children}</div>
     </section>
-  </div>;
+  </div>, document.body);
 }
 
 function Field({ label, children }) { return <label className="field"><span>{label}</span>{children}</label>; }
