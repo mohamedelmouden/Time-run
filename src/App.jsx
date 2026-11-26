@@ -556,7 +556,7 @@ function expenseChartSeries({ period, anchor, customStart, customEnd, expenses, 
   if (period === 'يومي') {
     const points = [...PURCHASE_PERIODS, 'unspecified'].map((purchasePeriod) => {
       const entries = (byDate.get(anchor) || []).filter((entry) => entry.purchasePeriod === purchasePeriod).sort((a, b) => a.id.localeCompare(b.id));
-      const value = sumExpenses(entries);
+      const value = Math.round(sumExpenses(entries) * 100) / 100;
       return { key: `${anchor}-${purchasePeriod}`, date: anchor, label: s.t(purchasePeriodLabels[purchasePeriod]), value, entries, high: value > 20 };
     });
     return { points, threshold: 20, rangeStart: anchor, rangeEnd: anchor };
@@ -588,7 +588,7 @@ function expenseChartSeries({ period, anchor, customStart, customEnd, expenses, 
   const points = [];
   for (let key = start; key <= end; key = shiftDate(key, 1)) {
     const entries = (byDate.get(key) || []).sort((a, b) => a.id.localeCompare(b.id));
-    const value = sumExpenses(entries);
+    const value = Math.round(sumExpenses(entries) * 100) / 100;
     const label = period === 'أسبوعي'
       ? expenseDateLabel(key, s.lang, { weekday: 'short' })
       : period === 'شهري'
@@ -609,19 +609,52 @@ function ExpenseTrendChart({ s, anchor }) {
   const [customStart, setCustomStart] = useState(shiftDate(s.today, -6));
   const [customEnd, setCustomEnd] = useState(s.today);
   const [selected, setSelected] = useState(null);
+  const chartScrollRef = useRef(null);
+  const [chartViewportWidth, setChartViewportWidth] = useState(360);
   useEffect(() => setChartAnchor(anchor), [anchor]);
   const series = expenseChartSeries({ period, anchor: chartAnchor, customStart, customEnd, expenses: s.data.expenseEntries, s });
+  useEffect(() => {
+    const element = chartScrollRef.current;
+    if (!element || series.invalid) return undefined;
+    const measure = () => {
+      const width = Math.round(element.getBoundingClientRect().width);
+      if (width > 0) setChartViewportWidth((current) => current === width ? current : width);
+    };
+    measure();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(measure);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [series.invalid]);
   const points = series.points;
-  const width = Math.max(360, (points.length - 1) * 48 + 72);
+  const width = points.length > 31 ? Math.max(chartViewportWidth, (points.length - 1) * 48 + 72) : chartViewportWidth;
   const height = 216, left = 35, right = 20, top = 20, bottom = 42;
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
   const ceiling = Math.max(series.threshold, ...points.map((point) => point.value), 10);
   const scaleTop = Math.ceil(ceiling / 50) * 50;
-  const coordinates = points.map((point, index) => ({
-    ...point,
-    x: left + (points.length <= 1 ? plotWidth / 2 : index * plotWidth / (points.length - 1)),
-    y: top + plotHeight - point.value / scaleTop * plotHeight,
-  }));
+  const pointGap = points.length <= 1 ? plotWidth : plotWidth / (points.length - 1);
+  const coordinates = points.map((point, index) => {
+    const x = left + (points.length <= 1 ? plotWidth / 2 : index * pointGap);
+    const hitGap = Math.max(pointGap, 18);
+    return {
+      ...point,
+      x,
+      y: top + plotHeight - point.value / scaleTop * plotHeight,
+      hitLeft: Math.max(left, x - hitGap / 2),
+      hitRight: Math.min(left + plotWidth, x + hitGap / 2),
+    };
+  });
+  const selectNearestPoint = (event) => {
+    const svg = event.currentTarget.ownerSVGElement;
+    const bounds = svg?.getBoundingClientRect();
+    if (!bounds?.width) return;
+    const chartX = (event.clientX - bounds.left) * width / bounds.width;
+    const nearest = coordinates.reduce((closest, point) => Math.abs(point.x - chartX) < Math.abs(closest.x - chartX) ? point : closest, coordinates[0]);
+    if (nearest) setSelected(nearest);
+  };
   const line = coordinates.length ? coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ') : '';
   const area = coordinates.length ? `${line} L ${coordinates[coordinates.length - 1].x} ${top + plotHeight} L ${coordinates[0].x} ${top + plotHeight} Z` : '';
   const thresholdY = top + plotHeight - series.threshold / scaleTop * plotHeight;
@@ -639,14 +672,14 @@ function ExpenseTrendChart({ s, anchor }) {
       {period === 'مخصص' ? <div className="expense-chart-range"><Field label={s.t('من')}><input type="date" max={s.today} value={customStart} onChange={(event) => setCustomStart(event.target.value)}/></Field><Field label={s.t('إلى')}><input type="date" max={s.today} value={customEnd} onChange={(event) => setCustomEnd(event.target.value)}/></Field></div>
         : <div className="expense-chart-anchor"><Field label={s.t(period === 'شهري' ? 'الشهر المرجعي' : 'التاريخ المرجعي')}><input type={period === 'شهري' ? 'month' : 'date'} max={period === 'شهري' ? s.today.slice(0, 7) : s.today} value={period === 'شهري' ? chartAnchor.slice(0, 7) : chartAnchor} onChange={(event) => { const value = event.target.value; if (value) setChartAnchor(period === 'شهري' ? `${value}-01` : value); }}/></Field></div>}
       <p className="expense-chart-threshold"><span className="expense-high-dot"/>{s.t('إنفاق مرتفع')} · {s.t('أكثر من')} {money(series.threshold, s.lang)} {period === 'يومي' ? `· ${s.t('لكل فترة شراء')}` : `· ${s.t('لليوم')}`}</p>
-      {series.invalid ? <p className="expense-chart-empty">{s.t('راجع نطاق التاريخ المختار.')}</p> : <div className="expense-chart-scroll">
+      {series.invalid ? <p className="expense-chart-empty">{s.t('راجع نطاق التاريخ المختار.')}</p> : <div className="expense-chart-scroll" ref={chartScrollRef}>
         {points.length ? <svg className="expense-chart-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={s.t('منحنى المصاريف')}>
           <defs><linearGradient id="expenseChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--primary)" stopOpacity=".28"/><stop offset="1" stopColor="var(--primary)" stopOpacity=".015"/></linearGradient></defs>
           {[0, .5, 1].map((fraction) => { const y = top + plotHeight * fraction; return <g key={fraction}><line className="expense-chart-grid" x1={left} y1={y} x2={width - right} y2={y}/><text className="expense-chart-y-label" x={left - 7} y={y + 3} textAnchor="end">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 0 }).format(Math.round(scaleTop * (1 - fraction)))}</text></g>; })}
           <line className="expense-chart-threshold-line" x1={left} y1={thresholdY} x2={width - right} y2={thresholdY}/>
           <path className="expense-chart-area" d={area}/><path className="expense-chart-line" d={line}/>
-          {coordinates.map((point, index) => <g className={`expense-chart-point ${point.high ? 'expense-chart-point-high' : ''}`} key={point.key} role="button" tabIndex="0" aria-label={`${point.label}: ${money(point.value, s.lang)}`} onClick={() => setSelected(point)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(point); } }}>
-            <title>{`${point.label}: ${money(point.value, s.lang)}`}</title><circle className="expense-chart-point-hit" cx={point.x} cy={point.y} r="12"/><circle className="expense-chart-point-dot" cx={point.x} cy={point.y} r={point.high ? 5.5 : 4.5}/>
+          {coordinates.map((point, index) => <g className={`expense-chart-point ${point.high ? 'expense-chart-point-high' : ''}`} key={point.key} role="button" tabIndex="0" aria-label={`${point.label}: ${money(point.value, s.lang)}`} onClick={selectNearestPoint} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(point); } }}>
+            <title>{`${point.label}: ${money(point.value, s.lang)}`}</title><rect className="expense-chart-point-hit-band" x={point.hitLeft} y={top} width={point.hitRight - point.hitLeft} height={plotHeight}/><circle className="expense-chart-point-hit" cx={point.x} cy={point.y} r="12"/><circle className="expense-chart-point-dot" cx={point.x} cy={point.y} r={point.high ? 5.5 : 4.5}/>
             {points.length <= 7 && <text className={`expense-chart-value ${point.high ? 'expense-chart-value-high' : ''}`} x={point.x} y={point.y - 11} textAnchor="middle">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 0 }).format(point.value)}</text>}
             {(index % labelEvery === 0 || index === points.length - 1) && <text className="expense-chart-x-label" x={point.x} y={height - 13} textAnchor="middle">{point.label}</text>}
           </g>)}

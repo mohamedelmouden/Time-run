@@ -173,7 +173,7 @@
 @media(max-width:600px){.next-event{grid-template-columns:minmax(0,1fr) 142px}.next-event .countdown{width:142px;height:142px}.next-event .countdown-ring{width:142px;height:142px}.event-card-main{grid-template-columns:minmax(0,1fr) 104px}.event-card-main .countdown{width:104px;height:104px}}
 @media(max-width:390px){.next-event{grid-template-columns:minmax(0,1fr) 126px}.next-event .countdown{width:126px;height:126px}.next-event .countdown-ring{width:126px;height:126px}.event-card-main{grid-template-columns:minmax(0,1fr) 96px}.event-card-main .countdown{width:96px;height:96px}}
 
-.expense-chart-panel{display:grid;gap:12px;overflow:hidden}
+.expense-chart-panel{display:grid;min-width:0;gap:12px;overflow:hidden}
 .expense-chart-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .expense-chart-heading h2{margin:2px 0 0;font-size:16px}
 .expense-chart-heading p{margin:3px 0 0;color:var(--muted);font-size:11px}
@@ -186,7 +186,7 @@
 .light .expense-chart-anchor input,.light .expense-chart-range input{color-scheme:light}
 .expense-chart-threshold{display:flex;align-items:center;gap:6px;margin:0;color:var(--muted);font-size:10px}
 .expense-high-dot{width:8px;height:8px;flex:none;border-radius:50%;background:var(--bad);box-shadow:0 0 8px color-mix(in srgb,var(--bad) 35%,transparent)}
-.expense-chart-scroll{width:100%;overflow-x:auto;overflow-y:hidden;border-radius:14px;scrollbar-color:var(--track) transparent;scrollbar-width:thin}
+.expense-chart-scroll{width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;border-radius:14px;scrollbar-color:var(--track) transparent;scrollbar-width:thin}
 .expense-chart-svg{display:block;max-width:none;overflow:visible;direction:ltr}
 .expense-chart-grid{stroke:var(--line);stroke-width:1}
 .expense-chart-y-label,.expense-chart-x-label{fill:var(--muted);font:600 9px 'Tajawal',sans-serif;font-variant-numeric:tabular-nums}
@@ -194,6 +194,7 @@
 .expense-chart-area{fill:url(#expenseChartFill)}
 .expense-chart-line{fill:none;stroke:var(--primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 5px color-mix(in srgb,var(--primary) 27%,transparent))}
 .expense-chart-point{cursor:pointer;outline:none}
+.expense-chart-point-hit-band{fill:transparent;pointer-events:all}
 .expense-chart-point-hit{fill:transparent}
 .expense-chart-point-dot{fill:var(--panel);stroke:var(--primary);stroke-width:2.5;transition:r .15s ease,fill .15s ease}
 .expense-chart-point:hover .expense-chart-point-dot,.expense-chart-point:focus .expense-chart-point-dot{r:7;fill:var(--primary)}
