@@ -219,6 +219,21 @@ function CommitmentCalendar({ commitment, s }) {
   })}</div><div className="calendar-legend"><span><i className="legend-win"/>{s.t('نجاح')}</span><span><i className="legend-loss"/>{s.t('خسارة')}</span><span><i className="commitment-legend-off"/>{s.t('يوم راحة')}</span></div></section>;
 }
 
+function CommitmentFeedback({ status, s, commitmentTitle }) {
+  const success = status === 'success';
+  return createPortal(<div className={`commitment-feedback commitment-feedback-${status}`} role="status" aria-live="assertive" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
+    <section className="commitment-feedback-card">
+      <div className="commitment-feedback-mark" aria-hidden="true"><span className="commitment-feedback-ring commitment-feedback-ring-one"/><span className="commitment-feedback-ring commitment-feedback-ring-two"/><span className="commitment-feedback-flame"><Flame size={32} fill="currentColor" strokeWidth={1.5}/></span><span className="commitment-feedback-result">{success ? <Check size={15}/> : <X size={15}/>}</span></div>
+      <div className="commitment-feedback-brand"><b>FLAME</b><small>KEEP YOUR FIRE</small></div>
+      <span className="commitment-feedback-kicker">{s.t('نتيجة الالتزام')}</span>
+      <span className="commitment-feedback-target">{commitmentTitle}</span>
+      <h2>{s.t(success ? 'أحسنت، وفيت بوعدك!' : 'أخفقت في وعدك اليوم.')}</h2>
+      <p>{s.t(success ? 'التزامك اليوم خطوة حقيقية نحو النسخة التي تريدها. استمر.' : 'كان عليك الالتزام. لا تبرّر الإخفاق؛ صحّح مسارك وابدأ من جديد غداً.')}</p>
+      <span className="commitment-feedback-progress" aria-hidden="true"><i/></span>
+    </section>
+  </div>, document.body);
+}
+
 const FLAME_PALETTES = [
   { start: '#fff18a', middle: '#ff9a27', end: '#ed381b', glow: '#ff8a32' },
   { start: '#c5fbff', middle: '#4ccaff', end: '#5653ef', glow: '#42c8f3' },
@@ -243,8 +258,14 @@ function CommitmentFlame({ style = 0, days = 0, label, countBelow = false }) {
 function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = false, cardId }) {
   const [expanded, setExpanded] = useState(false);
   const [editMark, setEditMark] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState('');
   const [clockNow, setClockNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setClockNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    if (!feedbackStatus) return undefined;
+    const timer = window.setTimeout(() => setFeedbackStatus(''), 3200);
+    return () => window.clearTimeout(timer);
+  }, [feedbackStatus]);
   const now = new Date(clockNow);
   const day = commitment.id === LEGACY_COMMITMENT_ID ? markableDay(now) : markableCommitmentDay(commitment, now);
   const record = day ? commitment.records.find((item) => item.date === day) : null;
@@ -304,6 +325,7 @@ function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = 
     if (record && !editMark && !window.confirm(s.t('تعديل تسجيل اليوم؟'))) return;
     s.recordCommitmentDay(commitment.id, day, status);
     setEditMark(false);
+    setFeedbackStatus(status);
   };
   const enableReminder = async () => {
     if (!('Notification' in window)) { window.alert(s.t('الإشعارات غير مدعومة في هذا المتصفح.')); return; }
@@ -314,6 +336,7 @@ function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = 
     } catch { window.alert(s.t('اسمح بالإشعارات من إعدادات المتصفح لتفعيل التذكير.')); }
   };
   return <article id={cardId} tabIndex={focusTarget ? -1 : undefined} className={`panel commitment-card ${compact ? 'commitment-card-compact' : ''} ${focusTarget ? 'commitment-card-target' : ''}`}>
+    {feedbackStatus && <CommitmentFeedback status={feedbackStatus} s={s} commitmentTitle={commitment.title}/>}
     <div className="commitment-card-head"><div className="commitment-card-title"><CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')}/><div><h3>{commitment.title}</h3><small>{s.t('يبدأ الالتزام')} · {s.fd(commitment.startDate, { year: true })}</small></div></div><div className="row-actions">{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button" aria-label={s.t('تعديل الالتزام')} onClick={() => onEdit?.(commitment)}><Pencil size={15}/></button>}<button className="icon-button" aria-label={s.t(expanded ? 'إخفاء التقويم' : 'عرض التقويم')} onClick={() => setExpanded((value) => !value)}><CalendarDays size={16}/></button>{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button icon-danger" aria-label={s.t('حذف الالتزام')} onClick={() => window.confirm(s.t('حذف هذا الالتزام؟')) && s.deleteCommitment(commitment.id)}><Trash2 size={15}/></button>}</div></div>
     <div className="commitment-weekdays">{commitment.weekdays.map((index) => <span key={index}>{s.t(WEEKDAYS[index])}</span>)}</div>
     <div className="commitment-progress-stack">
@@ -325,7 +348,7 @@ function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = 
       {canRecord && <div className="mark-date">{s.t('اليوم المفتوح للتسجيل:')} <b>{s.fd(day)}</b></div>}
       {!canRecord && !record ? <p className="mark-hint">{commitment.startDate > s.today ? `${s.t('يبدأ الالتزام في')} ${s.fd(commitment.startDate, { year: true })}` : !day ? commitment.id === LEGACY_COMMITMENT_ID ? s.t('التسجيل مفتوح من 22:00 إلى 08:00 فقط. إن لم تسجّل قبل 08:00 يُحتسب اليوم خسارة.') : `${s.t('يفتح التسجيل عند')} ${checkInTime}` : s.t('هذا اليوم خارج جدول الالتزام.')}</p>
         : record && !editMark ? <div className="mark-result"><span className={record.status === 'success' ? 'text-success' : 'text-danger'}><CheckCircle2 size={17}/>{s.t(record.status === 'success' ? 'سجّلت التزام اليوم' : 'سجّلت إخفاق اليوم')}</span>{canRecord && <button className="button subtle compact" onClick={() => setEditMark(true)}><Pencil size={14}/>{s.t('تعديل')}</button>}</div>
-          : <div className="mark-actions"><button className="button primary" onClick={() => recordResult('success')}>🔥 {s.t('التزمت اليوم')}</button><button className="button danger-soft" onClick={() => recordResult('failure')}>{s.t('لم ألتزم اليوم')}</button></div>}
+          : <div className="mark-actions"><button className="button primary" onClick={() => recordResult('success')}><Flame size={16} fill="currentColor"/>{s.t('التزمت اليوم')}</button><button className="button danger-soft" onClick={() => recordResult('failure')}>{s.t('لم ألتزم اليوم')}</button></div>}
     </div>
     {commitment.id !== LEGACY_COMMITMENT_ID && (commitment.reminders ? <div className="commitment-reminder-status"><AlarmClock size={13}/>{s.t('التذكير مفعل')}</div> : <button className="commitment-reminder-link" onClick={enableReminder}><AlarmClock size={14}/>{s.t('تفعيل إشعار التقييم')}</button>)}
     {expanded && <CommitmentCalendar commitment={commitment} s={s}/>}
@@ -599,17 +622,7 @@ function ExpenseTrendChart({ s, anchor }) {
     x: left + (points.length <= 1 ? plotWidth / 2 : index * plotWidth / (points.length - 1)),
     y: top + plotHeight - point.value / scaleTop * plotHeight,
   }));
-  const line = coordinates.length ? coordinates.reduce((path, point, index) => {
-    if (index === 0) return `M ${point.x} ${point.y}`;
-    const previous = coordinates[index - 1];
-    const before = coordinates[index - 2] || previous;
-    const after = coordinates[index + 1] || point;
-    const firstX = previous.x + (point.x - before.x) / 6;
-    const firstY = previous.y + (point.y - before.y) / 6;
-    const secondX = point.x - (after.x - previous.x) / 6;
-    const secondY = point.y - (after.y - previous.y) / 6;
-    return `${path} C ${firstX} ${firstY}, ${secondX} ${secondY}, ${point.x} ${point.y}`;
-  }, '') : '';
+  const line = coordinates.length ? coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ') : '';
   const area = coordinates.length ? `${line} L ${coordinates[coordinates.length - 1].x} ${top + plotHeight} L ${coordinates[0].x} ${top + plotHeight} Z` : '';
   const thresholdY = top + plotHeight - series.threshold / scaleTop * plotHeight;
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
