@@ -4,7 +4,7 @@ import {
   Activity, AlarmClock, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Award, BarChart3, CalendarDays,
   CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, CloudDownload,
   Download, Flame, Home, Languages, ListChecks, Menu, Moon, Pencil, Plus, Receipt, RotateCcw, Settings2,
-  BadgeCheck, Ban, CircleAlert, CircleOff, CircleX, Gem, Medal, ShieldAlert, ShieldCheck, Sparkles, Sun, Target, Timer, Trash2, TrendingDown, TrendingUp, Trophy, TriangleAlert, Upload, X, Zap,
+  BadgeCheck, Ban, CircleAlert, CircleOff, CircleX, Flag, Gem, Medal, ShieldAlert, ShieldCheck, Sparkles, Sun, Target, Timer, Trash2, TrendingDown, TrendingUp, Trophy, TriangleAlert, Upload, X, Zap,
 } from 'lucide-react';
 import {
   accents, commitmentIncludesDate, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableCommitmentDay, markableDay, nextCommitmentDay, normalizeData,

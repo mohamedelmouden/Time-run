@@ -14,21 +14,29 @@
       #root{min-height:100vh}
       .boot-message{position:relative;isolation:isolate;box-sizing:border-box;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:19px;overflow:hidden;padding:24px;background:radial-gradient(ellipse at 50% 48%,rgba(255,138,50,.09),transparent 38%),#0b0d12;text-align:center}
       .boot-message:before{position:absolute;z-index:-1;width:220px;height:220px;border-radius:50%;background:rgba(255,138,50,.09);content:"";filter:blur(55px)}
-      .boot-loader{position:relative;width:112px;height:112px;display:grid;place-items:center}
+      .boot-loader{position:relative;width:136px;height:136px;display:grid;place-items:center}
       .boot-loader:before,.boot-loader:after{position:absolute;inset:5px;border:1px solid rgba(255,193,90,.16);border-radius:50%;content:""}
       .boot-loader:after{border:2px solid transparent;border-top-color:#ff8a32;border-right-color:rgba(255,193,90,.7);animation:boot-spin 1.15s linear infinite;filter:drop-shadow(0 0 7px rgba(255,138,50,.5))}
-      .boot-loader-orbit{position:absolute;inset:15px;border:1px dashed rgba(255,255,255,.12);border-radius:50%;animation:boot-spin 8s linear infinite reverse}
-      .boot-loader-orbit:after{position:absolute;top:2px;left:50%;width:6px;height:6px;border-radius:50%;background:#ffc15a;content:"";box-shadow:0 0 12px #ff8a32}
-      .boot-flame-core{width:58px;height:58px;display:grid;place-items:center;border:1px solid rgba(255,193,90,.23);border-radius:20px;background:linear-gradient(145deg,rgba(255,138,50,.2),rgba(255,193,90,.06));box-shadow:0 0 28px rgba(255,138,50,.13),inset 0 1px rgba(255,255,255,.06)}
-      .boot-flame-core svg{width:35px;height:35px;overflow:visible;filter:drop-shadow(0 0 8px rgba(255,138,50,.48));animation:boot-flame-pulse 1.8s ease-in-out infinite}
+      .boot-electron-orbit{position:absolute;z-index:1;top:50%;left:50%;border:1px solid rgba(255,193,90,.2);border-radius:50%}
+      .boot-electron-orbit i{position:absolute;top:0;left:50%;width:7px;height:7px;border-radius:50%;background:#ffc15a;box-shadow:0 0 12px #ff8a32;transform:translate(-50%,-50%)}
+      .boot-electron-orbit-one{width:118px;height:48px;animation:boot-orbit-one 2.4s linear infinite}
+      .boot-electron-orbit-two{width:101px;height:43px;border-color:rgba(255,138,50,.23);animation:boot-orbit-two 3.1s linear infinite}
+      .boot-electron-orbit-two i{width:6px;height:6px;background:#ff8a32;box-shadow:0 0 12px #ff8a32}
+      .boot-electron-orbit-three{width:126px;height:38px;border-style:dashed;border-color:rgba(255,255,255,.14);animation:boot-orbit-three 4s linear infinite}
+      .boot-electron-orbit-three i{width:5px;height:5px;background:#fff1a0;box-shadow:0 0 10px #ffc15a}
+      .boot-flame-core{position:relative;z-index:2;width:58px;height:58px;display:grid;place-items:center;border-radius:50%;background:radial-gradient(circle,rgba(255,138,50,.17),rgba(255,138,50,.04) 58%,transparent 73%)}
+      .boot-flame-core svg{width:42px;height:42px;overflow:visible;filter:drop-shadow(0 0 9px rgba(255,138,50,.58));animation:boot-flame-pulse 1.8s ease-in-out infinite}
       .boot-message>b{color:#f4f4f5;font-size:14px;font-weight:700;letter-spacing:.24em;text-indent:.24em}
       @keyframes boot-spin{to{transform:rotate(360deg)}}
+      @keyframes boot-orbit-one{from{transform:translate(-50%,-50%) rotate(-24deg)}to{transform:translate(-50%,-50%) rotate(336deg)}}
+      @keyframes boot-orbit-two{from{transform:translate(-50%,-50%) rotate(58deg)}to{transform:translate(-50%,-50%) rotate(-302deg)}}
+      @keyframes boot-orbit-three{from{transform:translate(-50%,-50%) rotate(-62deg)}to{transform:translate(-50%,-50%) rotate(298deg)}}
       @keyframes boot-flame-pulse{0%,100%{transform:translateY(1px) scale(.96);filter:drop-shadow(0 0 5px rgba(255,138,50,.38))}50%{transform:translateY(-2px) scale(1.04);filter:drop-shadow(0 0 10px rgba(255,193,90,.62))}}
-      @media(prefers-reduced-motion:reduce){.boot-loader:after,.boot-loader-orbit,.boot-flame-core svg{animation:none}}
+      @media(prefers-reduced-motion:reduce){.boot-loader:after,.boot-electron-orbit,.boot-flame-core svg{animation:none}}
     </style>
   </head>
   <body>
-    <div id="root"><div class="boot-message" role="status" aria-label="جارٍ تحميل FLAME"><div class="boot-loader" aria-hidden="true"><span class="boot-loader-orbit"></span><span class="boot-flame-core"><svg viewBox="0 0 64 64"><defs><linearGradient id="boot-flame" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffe75a"/><stop offset=".5" stop-color="#ff8a20"/><stop offset="1" stop-color="#ef3614"/></linearGradient></defs><path fill="url(#boot-flame)" d="M34 7c3 9 0 14-4 21-2 3-3 6-3 9-4-4-5-8-4-13-7 7-11 14-10 22 1 9 9 15 19 15 11 0 19-7 19-17 0-8-4-15-10-22 1 5 0 8-2 10 0-8-3-17-5-25z"/><path fill="#fff1a0" d="M33 34c-1 5-7 9-6 15 1 4 4 7 8 7 5 0 8-4 8-9 0-4-3-8-6-12 0 4-1 6-4 8 1-4 1-6 0-9z"/></svg></span></div><b>FLAME</b></div></div>
+    <div id="root"><div class="boot-message" role="status" aria-label="جارٍ تحميل FLAME"><div class="boot-loader" aria-hidden="true"><span class="boot-electron-orbit boot-electron-orbit-one"><i/></span><span class="boot-electron-orbit boot-electron-orbit-two"><i/></span><span class="boot-electron-orbit boot-electron-orbit-three"><i/></span><span class="boot-flame-core"><svg viewBox="0 0 64 64"><defs><linearGradient id="boot-flame" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffe75a"/><stop offset=".5" stop-color="#ff8a20"/><stop offset="1" stop-color="#ef3614"/></linearGradient></defs><path fill="url(#boot-flame)" d="M34 7c3 9 0 14-4 21-2 3-3 6-3 9-4-4-5-8-4-13-7 7-11 14-10 22 1 9 9 15 19 15 11 0 19-7 19-17 0-8-4-15-10-22 1 5 0 8-2 10 0-8-3-17-5-25z"/><path fill="#fff1a0" d="M33 34c-1 5-7 9-6 15 1 4 4 7 8 7 5 0 8-4 8-9 0-4-3-8-6-12 0 4-1 6-4 8 1-4 1-6 0-9z"/></svg></span></div><b>FLAME</b></div></div>
     <div id="print-area"></div>
     <script type="module" src="./src/main.jsx" onerror="document.querySelector('.boot-message').innerHTML='<b>FLAME</b><p>تعذر تحميل ملفات الموقع. تحقق من الاتصال ثم حدّث الصفحة.</p>'"></script>
   </body>
