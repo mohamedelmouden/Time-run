@@ -4,7 +4,7 @@ import {
   Activity, AlarmClock, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Award, BarChart3, CalendarDays,
   CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, CloudDownload,
   Download, Flame, Home, Languages, ListChecks, Menu, Moon, Pencil, Plus, Receipt, RotateCcw, Settings2,
-  ShieldCheck, Sparkles, Sun, Target, Trash2, Upload, X,
+  BadgeCheck, Ban, CircleAlert, CircleOff, CircleX, Gem, Medal, ShieldAlert, ShieldCheck, Sparkles, Sun, Target, Timer, Trash2, TrendingDown, TrendingUp, Trophy, TriangleAlert, Upload, X, Zap,
 } from 'lucide-react';
 import {
   accents, commitmentIncludesDate, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableCommitmentDay, markableDay, nextCommitmentDay, normalizeData,
@@ -17,6 +17,52 @@ const useFlame = () => useContext(Ctx);
 const CAT = { exam: 'امتحان', deadline: 'موعد نهائي', competition: 'مسابقة', appointment: 'موعد', personal: 'شخصي', other: 'أخرى' };
 const PRIORITIES = { normal: 'عادية', important: 'مهم', critical: 'حرجة' };
 const WEEKDAYS = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+const COMMITMENT_FEEDBACK_MESSAGES = {
+  success: [
+    { title: 'وعدك لنفسك أمانة، وقد حفظته اليوم.', body: 'استمر؛ فالانضباط الذي تكرره يصبح قوة.', icon: Trophy },
+    { title: 'خطوة ثابتة نحو هدفك.', body: 'التزام اليوم تقدم حقيقي، مهما بدا صغيراً.', icon: TrendingUp },
+    { title: 'أنت من انتصر على التردد.', body: 'اخترت الفعل اليوم، وهذا ما يصنع الفرق.', icon: Zap },
+    { title: 'اليوم فعلت ما وعدت به.', body: 'احتفظ بهذا الشعور، وابنِ عليه غداً.', icon: ShieldCheck },
+    { title: 'إرادتك تحولت إلى إنجاز.', body: 'كل مرة تفي فيها بوعدك، تزداد ثقتك بنفسك.', icon: Gem },
+    { title: 'أحسنت، انضباطك يثمر.', body: 'النجاحات الصغيرة تصنع عادة قوية مع الوقت.', icon: BadgeCheck },
+    { title: 'تقدّمك واضح اليوم.', body: 'أثبتّ أن قراراتك أقوى من أعذارك.', icon: CheckCircle2 },
+    { title: 'نجاح مستحق؛ لقد التزمت.', body: 'واجهت الصعوبة واخترت الطريق الصحيح.', icon: Medal },
+    { title: 'أضفت انتصاراً جديداً إلى رصيدك.', body: 'واصل بنفس الهدوء، وسترى أثر تراكم الأيام.', icon: Sparkles },
+    { title: 'أنت أقرب إلى هدفك مما كنت.', body: 'لا تتوقف الآن؛ احمِ هذا الإيقاع غداً.', icon: Target },
+  ],
+  failure: [
+    { title: 'أخفقت اليوم؛ واجه ذلك بصدق.', body: 'كان عليك الالتزام. لا تكرر القرار نفسه غداً.', icon: TriangleAlert },
+    { title: 'وعدك لنفسك لم يُحفظ اليوم.', body: 'تحمّل مسؤولية الإخفاق، وابدأ تصحيحه من الغد.', icon: CircleX },
+    { title: 'اليوم لم يكن في مستوى هدفك.', body: 'لا تختلق الأعذار؛ غيّر سلوكك قبل أن يتكرر الإخفاق.', icon: ShieldAlert },
+    { title: 'أهدرت فرصة اليوم.', body: 'كان بإمكانك الاختيار الأفضل. استعد للغد بخطة واضحة.', icon: Ban },
+    { title: 'توقّف عن تأجيل التزامك.', body: 'النية وحدها لا تكفي؛ التزم بالفعل في المرة القادمة.', icon: Timer },
+    { title: 'خذ هذا الإخفاق بجدية.', body: 'إذا كررت السبب نفسه، ستكرر النتيجة نفسها.', icon: CircleAlert },
+    { title: 'خيّبت وعدك لنفسك اليوم.', body: 'تقبّل النتيجة، ثم أثبت غداً أنك قادر على التصحيح.', icon: CircleOff },
+    { title: 'غاب الانضباط عن قرارك اليوم.', body: 'لا تجعل هذا الإخفاق يتحول إلى عادة.', icon: TrendingDown },
+    { title: 'لم تلتزم، وهذه مسؤوليتك.', body: 'راجع اختيارك وعد إلى المسار من دون تبرير.', icon: Flag },
+    { title: 'اليوم خسرت أمام ترددك.', body: 'احسم قرارك غداً، ولا تترك الفرصة تمر مرة أخرى.', icon: RotateCcw },
+  ],
+};
+const commitmentFeedbackBags = { success: [], failure: [] };
+const lastCommitmentFeedback = { success: -1, failure: -1 };
+
+function chooseCommitmentFeedback(status) {
+  const messages = COMMITMENT_FEEDBACK_MESSAGES[status];
+  const bag = commitmentFeedbackBags[status];
+  if (!bag.length) {
+    const shuffled = messages.map((_, index) => index);
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+    }
+    const lastIndex = shuffled.length - 1;
+    if (shuffled.length > 1 && shuffled[lastIndex] === lastCommitmentFeedback[status]) [shuffled[lastIndex], shuffled[lastIndex - 1]] = [shuffled[lastIndex - 1], shuffled[lastIndex]];
+    commitmentFeedbackBags[status] = shuffled;
+  }
+  const variant = commitmentFeedbackBags[status].pop();
+  lastCommitmentFeedback[status] = variant;
+  return { ...messages[variant], status, variant: variant + 1 };
+}
 
 function useDateLabel(language) {
   return (key, options = {}) => {
@@ -219,16 +265,17 @@ function CommitmentCalendar({ commitment, s }) {
   })}</div><div className="calendar-legend"><span><i className="legend-win"/>{s.t('نجاح')}</span><span><i className="legend-loss"/>{s.t('خسارة')}</span><span><i className="commitment-legend-off"/>{s.t('يوم راحة')}</span></div></section>;
 }
 
-function CommitmentFeedback({ status, s, commitmentTitle }) {
-  const success = status === 'success';
-  return createPortal(<div className={`commitment-feedback commitment-feedback-${status}`} role="status" aria-live="assertive" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
+function CommitmentFeedback({ feedback, s, commitmentTitle }) {
+  const success = feedback.status === 'success';
+  const FeedbackIcon = feedback.icon;
+  return createPortal(<div className={`commitment-feedback commitment-feedback-${feedback.status} commitment-feedback-variant-${feedback.variant}`} role="status" aria-live="assertive" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
     <section className="commitment-feedback-card">
-      <div className="commitment-feedback-mark" aria-hidden="true"><span className="commitment-feedback-ring commitment-feedback-ring-one"/><span className="commitment-feedback-ring commitment-feedback-ring-two"/><span className="commitment-feedback-flame"><Flame size={32} fill="currentColor" strokeWidth={1.5}/></span><span className="commitment-feedback-result">{success ? <Check size={15}/> : <X size={15}/>}</span></div>
+      <div className="commitment-feedback-mark" aria-hidden="true"><span className="commitment-feedback-ring commitment-feedback-ring-one"/><span className="commitment-feedback-ring commitment-feedback-ring-two"/><span className="commitment-feedback-symbol"><FeedbackIcon size={31} strokeWidth={1.8}/></span><span className="commitment-feedback-result">{success ? <Check size={15}/> : <X size={15}/>}</span></div>
       <div className="commitment-feedback-brand"><b>FLAME</b><small>KEEP YOUR FIRE</small></div>
       <span className="commitment-feedback-kicker">{s.t('نتيجة الالتزام')}</span>
       <span className="commitment-feedback-target">{commitmentTitle}</span>
-      <h2>{s.t(success ? 'أحسنت، وفيت بوعدك!' : 'أخفقت في وعدك اليوم.')}</h2>
-      <p>{s.t(success ? 'التزامك اليوم خطوة حقيقية نحو النسخة التي تريدها. استمر.' : 'كان عليك الالتزام. لا تبرّر الإخفاق؛ صحّح مسارك وابدأ من جديد غداً.')}</p>
+      <h2>{s.t(feedback.title)}</h2>
+      <p>{s.t(feedback.body)}</p>
       <span className="commitment-feedback-progress" aria-hidden="true"><i/></span>
     </section>
   </div>, document.body);
@@ -258,14 +305,14 @@ function CommitmentFlame({ style = 0, days = 0, label, countBelow = false }) {
 function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = false, cardId }) {
   const [expanded, setExpanded] = useState(false);
   const [editMark, setEditMark] = useState(false);
-  const [feedbackStatus, setFeedbackStatus] = useState('');
+  const [feedback, setFeedback] = useState(null);
   const [clockNow, setClockNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setClockNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
   useEffect(() => {
-    if (!feedbackStatus) return undefined;
-    const timer = window.setTimeout(() => setFeedbackStatus(''), 3200);
+    if (!feedback) return undefined;
+    const timer = window.setTimeout(() => setFeedback(null), 4800);
     return () => window.clearTimeout(timer);
-  }, [feedbackStatus]);
+  }, [feedback]);
   const now = new Date(clockNow);
   const day = commitment.id === LEGACY_COMMITMENT_ID ? markableDay(now) : markableCommitmentDay(commitment, now);
   const record = day ? commitment.records.find((item) => item.date === day) : null;
@@ -325,7 +372,7 @@ function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = 
     if (record && !editMark && !window.confirm(s.t('تعديل تسجيل اليوم؟'))) return;
     s.recordCommitmentDay(commitment.id, day, status);
     setEditMark(false);
-    setFeedbackStatus(status);
+    setFeedback(chooseCommitmentFeedback(status));
   };
   const enableReminder = async () => {
     if (!('Notification' in window)) { window.alert(s.t('الإشعارات غير مدعومة في هذا المتصفح.')); return; }
@@ -336,7 +383,7 @@ function CommitmentCard({ commitment, s, compact = false, onEdit, focusTarget = 
     } catch { window.alert(s.t('اسمح بالإشعارات من إعدادات المتصفح لتفعيل التذكير.')); }
   };
   return <article id={cardId} tabIndex={focusTarget ? -1 : undefined} className={`panel commitment-card ${compact ? 'commitment-card-compact' : ''} ${focusTarget ? 'commitment-card-target' : ''}`}>
-    {feedbackStatus && <CommitmentFeedback status={feedbackStatus} s={s} commitmentTitle={commitment.title}/>}
+    {feedback && <CommitmentFeedback feedback={feedback} s={s} commitmentTitle={commitment.title}/>}
     <div className="commitment-card-head"><div className="commitment-card-title"><CommitmentFlame style={commitment.flameStyle} days={stats.current} label={s.t('أيام متتالية')}/><div><h3>{commitment.title}</h3><small>{s.t('يبدأ الالتزام')} · {s.fd(commitment.startDate, { year: true })}</small></div></div><div className="row-actions">{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button" aria-label={s.t('تعديل الالتزام')} onClick={() => onEdit?.(commitment)}><Pencil size={15}/></button>}<button className="icon-button" aria-label={s.t(expanded ? 'إخفاء التقويم' : 'عرض التقويم')} onClick={() => setExpanded((value) => !value)}><CalendarDays size={16}/></button>{commitment.id !== LEGACY_COMMITMENT_ID && <button className="icon-button icon-danger" aria-label={s.t('حذف الالتزام')} onClick={() => window.confirm(s.t('حذف هذا الالتزام؟')) && s.deleteCommitment(commitment.id)}><Trash2 size={15}/></button>}</div></div>
     <div className="commitment-weekdays">{commitment.weekdays.map((index) => <span key={index}>{s.t(WEEKDAYS[index])}</span>)}</div>
     <div className="commitment-progress-stack">
