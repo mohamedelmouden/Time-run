@@ -180,6 +180,15 @@
 .expense-chart-icon{width:38px;height:38px;display:grid;place-items:center;flex:none;border:1px solid color-mix(in srgb,var(--primary) 25%,var(--line));border-radius:13px;background:color-mix(in srgb,var(--primary) 10%,var(--panel-raised));color:var(--primary)}
 .expense-chart-periods{grid-template-columns:repeat(4,minmax(0,1fr))}
 .expense-chart-periods button{min-width:0;font-size:10px}
+.expense-chart-types{grid-template-columns:repeat(3,minmax(0,1fr))}
+.expense-chart-types button{min-width:0;min-height:38px;font-size:11px}
+.expense-chart-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.expense-chart-summary>div{min-width:0;display:grid;gap:3px;padding:9px 11px;border:1px solid var(--line);border-radius:13px;background:var(--panel-raised)}
+.expense-chart-summary>div>span{color:var(--muted);font-size:10px}
+.expense-chart-summary>div>b{font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.expense-chart-summary>div>small{color:var(--muted);font-size:9px}
+.expense-chart-summary .expense-chart-total{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.expense-chart-summary .expense-chart-total>b{color:var(--glow);font-size:18px;text-align:end}
 .expense-chart-anchor{max-width:240px}
 .expense-chart-range{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .expense-chart-anchor input,.expense-chart-range input{direction:ltr;text-align:start;color-scheme:dark}
@@ -189,10 +198,14 @@
 .expense-chart-scroll{width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;border-radius:14px;scrollbar-color:var(--track) transparent;scrollbar-width:thin}
 .expense-chart-svg{display:block;max-width:none;overflow:visible;direction:ltr}
 .expense-chart-grid{stroke:var(--line);stroke-width:1}
-.expense-chart-y-label,.expense-chart-x-label{fill:var(--muted);font:600 9px 'Tajawal',sans-serif;font-variant-numeric:tabular-nums}
+.expense-chart-y-label,.expense-chart-x-label,.expense-chart-unit{fill:var(--muted);font:600 9px 'Tajawal',sans-serif;font-variant-numeric:tabular-nums}
+.expense-chart-unit{font-size:8px}
 .expense-chart-threshold-line{stroke:var(--bad);stroke-width:1;stroke-dasharray:4 4;opacity:.75}
 .expense-chart-area{fill:url(#expenseChartFill)}
 .expense-chart-line{fill:none;stroke:var(--primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 5px color-mix(in srgb,var(--primary) 27%,transparent))}
+.expense-chart-bar{fill:var(--primary);opacity:.88;transition:opacity .15s ease,filter .15s ease}
+.expense-chart-point-high .expense-chart-bar{fill:var(--bad)}
+.expense-chart-point:hover .expense-chart-bar,.expense-chart-point:focus .expense-chart-bar{opacity:1;filter:brightness(1.12)}
 .expense-chart-point{cursor:pointer;outline:none}
 .expense-chart-point-hit-band{fill:transparent;pointer-events:all}
 .expense-chart-point-hit{fill:transparent}
@@ -204,6 +217,21 @@
 .expense-chart-value-high{fill:var(--bad)}
 .expense-chart-hint,.expense-chart-empty{margin:0;color:var(--muted);font-size:10px;line-height:1.5}
 .expense-chart-empty{text-align:center;padding:10px}
+.expense-donut-layout{display:grid;grid-template-columns:minmax(128px,160px) minmax(0,1fr);align-items:center;gap:12px;padding:4px 2px}
+.expense-donut-svg{display:block;width:100%;max-width:160px;margin:auto;overflow:visible}
+.expense-donut-track,.expense-donut-segment{fill:none;stroke-width:22}
+.expense-donut-track{stroke:var(--line)}
+.expense-donut-segment{transform:rotate(-90deg);transform-origin:72px 72px;cursor:pointer;transition:opacity .15s ease,stroke-width .15s ease}
+.expense-donut-segment:hover,.expense-donut-segment:focus{stroke-width:27;outline:none}
+.expense-donut-center-label{fill:var(--muted);font:600 9px 'Tajawal',sans-serif}
+.expense-donut-center-value{fill:var(--text);font:700 14px 'Tajawal',sans-serif;font-variant-numeric:tabular-nums}
+.expense-donut-legend{display:grid;gap:5px;min-width:0}
+.expense-donut-legend-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:7px;width:100%;min-width:0;padding:6px 7px;border:1px solid var(--line);border-radius:10px;background:var(--panel-raised);color:var(--text);text-align:start;cursor:pointer}
+.expense-donut-legend-item:hover,.expense-donut-legend-item:focus-visible{border-color:color-mix(in srgb,var(--primary) 45%,var(--line));outline:none}
+.expense-donut-legend-name{display:flex;align-items:center;gap:6px;min-width:0;font-size:10px}
+.expense-donut-legend-name>i{width:8px;height:8px;flex:none;border-radius:50%}
+.expense-donut-legend-name>small{margin-inline-start:auto;color:var(--muted);font-size:9px}
+.expense-donut-legend-item>b{font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .expense-point-details{display:grid;gap:12px}
 .expense-point-total{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel-raised)}
 .expense-point-total span{color:var(--muted);font-size:11px}
@@ -216,7 +244,8 @@
 .expense-point-row>div b{overflow-wrap:anywhere;font-size:12px}
 .expense-point-row small{color:var(--muted);font-size:10px}
 .expense-point-row>strong{flex:none;font-size:12px;font-variant-numeric:tabular-nums}
-@media(max-width:390px){.expense-chart-periods button{font-size:9px;padding-inline:2px}.expense-chart-panel{padding:13px}.expense-chart-range{gap:7px}}
+@media(max-width:390px){.expense-chart-periods button{font-size:9px;padding-inline:2px}.expense-chart-types button{font-size:10px;gap:4px}.expense-chart-panel{padding:13px}.expense-chart-range{gap:7px}.expense-donut-layout{grid-template-columns:minmax(116px,140px) minmax(0,1fr);gap:7px;padding-inline:0}.expense-donut-legend{gap:4px}.expense-donut-legend-item{padding:5px}.expense-chart-summary>div{padding:8px}}
+@media(max-width:340px){.expense-donut-layout{grid-template-columns:1fr}.expense-donut-svg{max-width:145px}.expense-donut-legend{grid-template-columns:1fr 1fr}}
 
 .bottom-nav>div{grid-template-columns:repeat(6,minmax(0,1fr))}
 .commitments-home-section{display:grid;gap:10px}

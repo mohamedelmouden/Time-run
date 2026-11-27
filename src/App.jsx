@@ -4,7 +4,7 @@ import {
   Activity, AlarmClock, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, Award, BarChart3, CalendarDays,
   CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, CloudDownload,
   Download, Flame, Home, Languages, ListChecks, Menu, Moon, Pencil, Plus, Receipt, RotateCcw, Settings2,
-  BadgeCheck, Ban, CircleAlert, CircleOff, CircleX, Flag, Gem, Medal, ShieldAlert, ShieldCheck, Sparkles, Sun, Target, Timer, Trash2, TrendingDown, TrendingUp, Trophy, TriangleAlert, Upload, X, Zap,
+  BadgeCheck, Ban, CircleAlert, CircleOff, CircleX, Flag, Gem, Medal, PieChart, ShieldAlert, ShieldCheck, Sparkles, Sun, Target, Timer, Trash2, TrendingDown, TrendingUp, Trophy, TriangleAlert, Upload, X, Zap,
 } from 'lucide-react';
 import {
   accents, commitmentIncludesDate, commitmentStreak, dateKey, emptyData, effectiveDay, eventDeadline, LEGACY_COMMITMENT_ID, loadData, markableCommitmentDay, markableDay, nextCommitmentDay, normalizeData,
@@ -588,7 +588,7 @@ function ReportFooter({ s }) { return <><footer className="report-footer"><b>FLA
 function ReportStat({ label, value, highlight = false }) { return <div className={`report-stat ${highlight ? 'report-stat-highlight' : ''}`}><small>{label}</small><b>{value}</b></div>; }
 function ReportSection({ title, children }) { return <section className="report-section"><h2>{title}</h2>{children}</section>; }
 
-function sumExpenses(entries) { return entries.reduce((total, entry) => total + entry.amount, 0); }
+function sumExpenses(entries) { return entries.reduce((total, entry) => total + Math.round(entry.amount * 100), 0) / 100; }
 
 function expenseDateLabel(key, language, options = {}) {
   return new Intl.DateTimeFormat(localeTag(language), options).format(new Date(`${key}T12:00:00`));
@@ -650,8 +650,24 @@ function numeralDateDay(key, language) {
   return new Intl.NumberFormat(localeTag(language)).format(Number(key.slice(-2)));
 }
 
+function niceExpenseAxis(value) {
+  if (value <= 0) return { step: 1, top: 4 };
+  const target = value / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(target));
+  const normalized = target / magnitude;
+  const factor = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
+  const step = factor * magnitude;
+  return { step, top: Math.ceil(value / step) * step };
+}
+
 function ExpenseTrendChart({ s, anchor }) {
   const [period, setPeriod] = useState('أسبوعي');
+  const [chartType, setChartType] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem('flame:expense-chart-type');
+      return ['line', 'bar', 'donut'].includes(saved) ? saved : 'bar';
+    } catch { return 'bar'; }
+  });
   const [chartAnchor, setChartAnchor] = useState(anchor);
   const [customStart, setCustomStart] = useState(shiftDate(s.today, -6));
   const [customEnd, setCustomEnd] = useState(s.today);
@@ -659,6 +675,10 @@ function ExpenseTrendChart({ s, anchor }) {
   const chartScrollRef = useRef(null);
   const [chartViewportWidth, setChartViewportWidth] = useState(360);
   useEffect(() => setChartAnchor(anchor), [anchor]);
+  useEffect(() => {
+    try { window.localStorage.setItem('flame:expense-chart-type', chartType); } catch { /* Preferences are optional. */ }
+  }, [chartType]);
+  useEffect(() => setSelected(null), [period, chartType, chartAnchor, customStart, customEnd]);
   const series = expenseChartSeries({ period, anchor: chartAnchor, customStart, customEnd, expenses: s.data.expenseEntries, s });
   useEffect(() => {
     const element = chartScrollRef.current;
@@ -678,10 +698,12 @@ function ExpenseTrendChart({ s, anchor }) {
   }, [series.invalid]);
   const points = series.points;
   const width = points.length > 31 ? Math.max(chartViewportWidth, (points.length - 1) * 48 + 72) : chartViewportWidth;
-  const height = 216, left = 35, right = 20, top = 20, bottom = 42;
+  const height = 232, left = 42, right = 16, top = 25, bottom = 42;
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
-  const ceiling = Math.max(series.threshold, ...points.map((point) => point.value), 10);
-  const scaleTop = Math.ceil(ceiling / 50) * 50;
+  const dataMaximum = Math.max(0, ...points.map((point) => point.value));
+  const axis = niceExpenseAxis(dataMaximum);
+  const scaleTop = axis.top;
+  const tickCount = Math.round(scaleTop / axis.step);
   const pointGap = points.length <= 1 ? plotWidth : plotWidth / (points.length - 1);
   const coordinates = points.map((point, index) => {
     const x = left + (points.length <= 1 ? plotWidth / 2 : index * pointGap);
@@ -700,16 +722,37 @@ function ExpenseTrendChart({ s, anchor }) {
     if (!bounds?.width) return;
     const chartX = (event.clientX - bounds.left) * width / bounds.width;
     const nearest = coordinates.reduce((closest, point) => Math.abs(point.x - chartX) < Math.abs(closest.x - chartX) ? point : closest, coordinates[0]);
-    if (nearest) setSelected(nearest);
+    if (nearest) choosePoint(nearest);
   };
   const line = coordinates.length ? coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ') : '';
   const area = coordinates.length ? `${line} L ${coordinates[coordinates.length - 1].x} ${top + plotHeight} L ${coordinates[0].x} ${top + plotHeight} Z` : '';
   const thresholdY = top + plotHeight - series.threshold / scaleTop * plotHeight;
   const labelEvery = Math.max(1, Math.ceil(points.length / 8));
+  const formatAxisValue = (value) => new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: Number.isInteger(axis.step) ? 0 : 2 }).format(value);
+  const allEntries = [...new Map(points.flatMap((point) => point.entries).map((entry) => [entry.id, entry])).values()];
+  const periodTotalCents = allEntries.reduce((total, entry) => total + Math.round(entry.amount * 100), 0);
+  const periodTotal = periodTotalCents / 100;
+  const rangeDayCount = series.rangeStart && series.rangeEnd
+    ? Math.max(1, Math.round((new Date(`${series.rangeEnd}T12:00:00`) - new Date(`${series.rangeStart}T12:00:00`)) / 86400000) + 1)
+    : 1;
+  const dayTotals = new Map();
+  allEntries.forEach((entry) => dayTotals.set(entry.date, (dayTotals.get(entry.date) || 0) + Math.round(entry.amount * 100)));
+  const highestDay = [...dayTotals.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  const purchaseBreakdown = [...PURCHASE_PERIODS, 'unspecified'].map((purchasePeriod, index) => {
+    const entries = allEntries.filter((entry) => entry.purchasePeriod === purchasePeriod);
+    const cents = entries.reduce((total, entry) => total + Math.round(entry.amount * 100), 0);
+    return { key: purchasePeriod, label: s.t(purchasePeriodLabels[purchasePeriod]), entries, value: cents / 100, percentage: periodTotalCents ? cents / periodTotalCents * 100 : 0, color: ['#d94a45', '#3b82f6', '#14a38b', '#e59a24', '#8b63c7'][index] };
+  }).filter((item) => item.value > 0);
+  const donutCircumference = 2 * Math.PI * 51;
   const title = period === 'مخصص' && series.rangeStart && series.rangeEnd
     ? `${s.fd(series.rangeStart, { year: true })} — ${s.fd(series.rangeEnd, { year: true })}`
-    : period === 'يومي' ? s.fd(chartAnchor, { year: true }) : period === 'أسبوعي' ? `${s.t('المصاريف حسب أيام الأسبوع')} · ${s.fd(series.rangeStart, { month: 'short' })} — ${s.fd(series.rangeEnd, { month: 'short', year: true })}` : s.fd(chartAnchor, { month: 'long', year: true });
-  const detailTitle = selected ? `${selected.label} · ${s.fd(selected.date, { year: true })}` : '';
+    : period === 'يومي' ? s.fd(chartAnchor, { year: true }) : period === 'أسبوعي' ? `${s.t('المصاريف حسب أيام الأسبوع')} · ${s.fd(series.rangeStart, { month: 'short' })} — ${s.fd(series.rangeEnd, { month: 'short', year: true })}` : new Intl.DateTimeFormat(localeTag(s.lang), { month: 'long', year: 'numeric' }).format(new Date(`${chartAnchor}T12:00:00`));
+  const detailTitle = selected?.detailsTitle || '';
+  const choosePoint = (point) => setSelected({ ...point, detailsTitle: `${point.label} · ${s.fd(point.date, { year: true })}` });
+  const activateWithKeyboard = (event, action) => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); action(); }
+  };
+  let donutOffset = 0;
   return <>
     <section className="panel expense-chart-panel" dir={s.lang === 'ar' ? 'rtl' : 'ltr'}>
       <div className="expense-chart-heading"><div><span className="eyebrow">FLAME · TREND</span><h2>{s.t('اتجاه المصاريف')}</h2><p>{title}</p></div><span className="expense-chart-icon"><Activity size={18}/></span></div>
@@ -718,24 +761,51 @@ function ExpenseTrendChart({ s, anchor }) {
       </div>
       {period === 'مخصص' ? <div className="expense-chart-range"><Field label={s.t('من')}><input type="date" max={s.today} value={customStart} onChange={(event) => setCustomStart(event.target.value)}/></Field><Field label={s.t('إلى')}><input type="date" max={s.today} value={customEnd} onChange={(event) => setCustomEnd(event.target.value)}/></Field></div>
         : <div className="expense-chart-anchor"><Field label={s.t(period === 'شهري' ? 'الشهر المرجعي' : 'التاريخ المرجعي')}><input type={period === 'شهري' ? 'month' : 'date'} max={period === 'شهري' ? s.today.slice(0, 7) : s.today} value={period === 'شهري' ? chartAnchor.slice(0, 7) : chartAnchor} onChange={(event) => { const value = event.target.value; if (value) setChartAnchor(period === 'شهري' ? `${value}-01` : value); }}/></Field></div>}
+      <div className="segmented expense-chart-types" role="group" aria-label={s.t('نوع المبيان')}>
+        {[['line', Activity, 'خطي'], ['bar', BarChart3, 'أعمدة'], ['donut', PieChart, 'قرص']].map(([value, Icon, label]) => <button type="button" aria-pressed={chartType === value} className={chartType === value ? 'selected' : ''} key={value} onClick={() => setChartType(value)}><Icon size={14}/>{s.t(label)}</button>)}
+      </div>
+      {!series.invalid && <div className="expense-chart-summary">
+        <div className="expense-chart-total"><span>{s.t('إجمالي الفترة')}</span><b>{money(periodTotal, s.lang)}</b></div>
+        <div><span>{s.t('المتوسط اليومي')}</span><b>{money(periodTotal / rangeDayCount, s.lang)}</b></div>
+        <div><span>{s.t('أعلى يوم')}</span><b>{highestDay ? money(highestDay[1] / 100, s.lang) : money(0, s.lang)}</b><small>{highestDay ? expenseDateLabel(highestDay[0], s.lang, { day: 'numeric', month: 'short' }) : '—'}</small></div>
+      </div>}
       <p className="expense-chart-threshold"><span className="expense-high-dot"/>{s.t('إنفاق مرتفع')} · {s.t('أكثر من')} {money(series.threshold, s.lang)} {period === 'يومي' ? `· ${s.t('لكل فترة شراء')}` : `· ${s.t('لليوم')}`}</p>
       {series.invalid ? <p className="expense-chart-empty">{s.t('راجع نطاق التاريخ المختار.')}</p> : <div className="expense-chart-scroll" ref={chartScrollRef}>
-        {points.length ? <svg className="expense-chart-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={s.t('منحنى المصاريف')}>
-          <defs><linearGradient id="expenseChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--primary)" stopOpacity=".28"/><stop offset="1" stopColor="var(--primary)" stopOpacity=".015"/></linearGradient></defs>
-          {[0, .5, 1].map((fraction) => { const y = top + plotHeight * fraction; return <g key={fraction}><line className="expense-chart-grid" x1={left} y1={y} x2={width - right} y2={y}/><text className="expense-chart-y-label" x={left - 7} y={y + 3} textAnchor="end">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 0 }).format(Math.round(scaleTop * (1 - fraction)))}</text></g>; })}
-          <line className="expense-chart-threshold-line" x1={left} y1={thresholdY} x2={width - right} y2={thresholdY}/>
-          <path className="expense-chart-area" d={area}/><path className="expense-chart-line" d={line}/>
-          {coordinates.map((point, index) => <g className={`expense-chart-point ${point.high ? 'expense-chart-point-high' : ''}`} key={point.key} role="button" tabIndex="0" aria-label={`${point.label}: ${money(point.value, s.lang)}`} onClick={selectNearestPoint} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(point); } }}>
-            <title>{`${point.label}: ${money(point.value, s.lang)}`}</title><rect className="expense-chart-point-hit-band" x={point.hitLeft} y={top} width={point.hitRight - point.hitLeft} height={plotHeight}/><circle className="expense-chart-point-hit" cx={point.x} cy={point.y} r="12"/><circle className="expense-chart-point-dot" cx={point.x} cy={point.y} r={point.high ? 5.5 : 4.5}/>
-            {points.length <= 7 && <text className={`expense-chart-value ${point.high ? 'expense-chart-value-high' : ''}`} x={point.x} y={point.y - 11} textAnchor="middle">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 0 }).format(point.value)}</text>}
-            {(index % labelEvery === 0 || index === points.length - 1) && <text className="expense-chart-x-label" x={point.x} y={height - 13} textAnchor="middle">{point.label}</text>}
-          </g>)}
+        {chartType === 'donut' ? purchaseBreakdown.length ? <div className="expense-donut-layout">
+          <svg className="expense-donut-svg" viewBox="0 0 144 144" role="group" aria-label={s.t('توزيع المصاريف حسب فترة الشراء')}>
+            <circle className="expense-donut-track" cx="72" cy="72" r="51"/>
+            {purchaseBreakdown.map((slice) => {
+              const segmentLength = slice.percentage / 100 * donutCircumference;
+              const offset = donutOffset;
+              donutOffset += segmentLength;
+              return <circle key={slice.key} className="expense-donut-segment" cx="72" cy="72" r="51" stroke={slice.color} strokeDasharray={`${segmentLength} ${donutCircumference - segmentLength}`} strokeDashoffset={-offset} role="button" tabIndex="0" aria-label={`${slice.label}: ${money(slice.value, s.lang)}، ${Math.round(slice.percentage)}%`} onClick={() => setSelected({ label: slice.label, value: slice.value, entries: slice.entries, high: false, detailsTitle: slice.label })} onKeyDown={(event) => activateWithKeyboard(event, () => setSelected({ label: slice.label, value: slice.value, entries: slice.entries, high: false, detailsTitle: slice.label }))}><title>{`${slice.label}: ${money(slice.value, s.lang)} · ${Math.round(slice.percentage)}%`}</title></circle>;
+            })}
+            <text className="expense-donut-center-label" x="72" y="67" textAnchor="middle">{s.t('إجمالي الفترة')}</text>
+            <text className="expense-donut-center-value" x="72" y="86" textAnchor="middle">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 0 }).format(periodTotal)}</text>
+          </svg>
+          <div className="expense-donut-legend">{purchaseBreakdown.map((slice) => <button type="button" className="expense-donut-legend-item" key={slice.key} onClick={() => setSelected({ label: slice.label, value: slice.value, entries: slice.entries, high: false, detailsTitle: slice.label })}><span className="expense-donut-legend-name"><i style={{ background: slice.color }}/>{slice.label}<small>{Math.round(slice.percentage)}%</small></span><b>{money(slice.value, s.lang)}</b></button>)}</div>
+        </div> : <p className="expense-chart-empty">{s.t('لا توجد نقاط في هذه الفترة.')}</p> : points.length ? <svg className="expense-chart-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="group" aria-label={s.t(chartType === 'bar' ? 'أعمدة المصاريف' : 'منحنى المصاريف')}>
+          {Array.from({ length: tickCount + 1 }, (_, index) => { const fraction = index / tickCount; const y = top + plotHeight * fraction; const value = scaleTop - axis.step * index; return <g key={index}><line className="expense-chart-grid" x1={left} y1={y} x2={width - right} y2={y}/><text className="expense-chart-y-label" x={left - 7} y={y + 3} textAnchor="end">{formatAxisValue(value)}</text></g>; })}
+          <text className="expense-chart-unit" x={left} y="13">{s.t('درهم')}</text>
+          {series.threshold <= scaleTop && <line className="expense-chart-threshold-line" x1={left} y1={thresholdY} x2={width - right} y2={thresholdY}/>}
+          {chartType === 'line' && <><defs><linearGradient id="expenseChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--primary)" stopOpacity=".25"/><stop offset="1" stopColor="var(--primary)" stopOpacity=".02"/></linearGradient></defs><path className="expense-chart-area" d={area}/><path className="expense-chart-line" d={line}/></>}
+          {coordinates.map((point, index) => {
+            const barWidth = Math.min(20, Math.max(6, pointGap * .64));
+            const barY = Math.min(point.y, top + plotHeight - 1);
+            const barHeight = Math.max(0, top + plotHeight - point.y);
+            return <g className={`expense-chart-point ${point.high ? 'expense-chart-point-high' : ''}`} key={point.key} role="button" tabIndex="0" aria-label={`${point.label}: ${money(point.value, s.lang)}`} onClick={selectNearestPoint} onKeyDown={(event) => activateWithKeyboard(event, () => choosePoint(point))}>
+              <title>{`${point.label}: ${money(point.value, s.lang)}`}</title><rect className="expense-chart-point-hit-band" x={point.hitLeft} y={top} width={point.hitRight - point.hitLeft} height={plotHeight}/>
+              {chartType === 'bar' ? <rect className="expense-chart-bar" x={point.x - barWidth / 2} y={barY} width={barWidth} height={barHeight} rx="3"/> : <><circle className="expense-chart-point-hit" cx={point.x} cy={point.y} r="12"/><circle className="expense-chart-point-dot" cx={point.x} cy={point.y} r={point.high ? 5.5 : 4.5}/></>}
+              {points.length <= 7 && point.value > 0 && <text className={`expense-chart-value ${point.high ? 'expense-chart-value-high' : ''}`} x={point.x} y={point.y - 11} textAnchor="middle">{new Intl.NumberFormat(localeTag(s.lang), { maximumFractionDigits: 2 }).format(point.value)}</text>}
+              {(index % labelEvery === 0 || index === points.length - 1) && <text className="expense-chart-x-label" x={point.x} y={height - 13} textAnchor="middle">{point.label}</text>}
+            </g>;
+          })}
         </svg> : <p className="expense-chart-empty">{s.t('لا توجد نقاط في هذه الفترة.')}</p>}
       </div>}
-      <p className="expense-chart-hint">{s.t('اضغط على أي نقطة لعرض تفاصيلها.')}</p>
+      <p className="expense-chart-hint">{s.t(chartType === 'donut' ? 'اضغط على فئة لعرض تفاصيلها.' : 'اضغط على أي نقطة لعرض تفاصيلها.')}</p>
     </section>
     <Modal open={!!selected} title={detailTitle} close={() => setSelected(null)}>
-      {selected && <div className="expense-point-details"><div className={`expense-point-total ${selected.high ? 'expense-point-total-high' : ''}`}><span>{s.t('الإجمالي')}</span><b>{money(selected.value, s.lang)}</b></div>{selected.entries.length ? <div className="expense-point-list">{selected.entries.map((entry) => <div className="expense-point-row" key={entry.id}><div><b>{entry.description}</b><small>{s.t(purchasePeriodLabels[entry.purchasePeriod] || purchasePeriodLabels.unspecified)}</small></div><strong className={entry.amount > series.threshold ? 'expense-point-amount-high' : ''}>{money(entry.amount, s.lang)}</strong></div>)}</div> : <p className="expense-chart-empty">{s.t('لا توجد مصاريف في هذه النقطة.')}</p>}</div>}
+      {selected && <div className="expense-point-details"><div className={`expense-point-total ${selected.high ? 'expense-point-total-high' : ''}`}><span>{s.t('الإجمالي')}</span><b>{money(selected.value, s.lang)}</b></div>{selected.entries.length ? <div className="expense-point-list">{selected.entries.map((entry) => <div className="expense-point-row" key={entry.id}><div><b>{entry.description}</b><small>{s.t(purchasePeriodLabels[entry.purchasePeriod] || purchasePeriodLabels.unspecified)}{chartType === 'donut' ? ` · ${s.fd(entry.date, { month: 'short', year: true })}` : ''}</small></div><strong className={entry.amount > series.threshold ? 'expense-point-amount-high' : ''}>{money(entry.amount, s.lang)}</strong></div>)}</div> : <p className="expense-chart-empty">{s.t('لا توجد مصاريف في هذه النقطة.')}</p>}</div>}
     </Modal>
   </>;
 }
