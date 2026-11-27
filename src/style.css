@@ -56,6 +56,7 @@
 .report-chooser-actions .button{min-width:0;padding-inline:9px;white-space:normal;text-align:center;font-size:12px}
 @media(max-width:390px){.report-period-options button{font-size:10px}.report-chooser-actions{grid-template-columns:1fr}}
 @media print{
+  .modal-scrim,.victory-celebration{display:none!important}
   body[data-print-report="period-full"] #print-area .period-full-report,
   body[data-print-report="period-financial"] #print-area .period-financial-report{display:block!important}
   .period-report{min-height:0!important}
